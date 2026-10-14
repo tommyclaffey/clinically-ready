@@ -1,0 +1,19 @@
+# Runs on every push: server tests, UI tests, type-check and build.
+# Railway is set to "Wait for CI", so a red run never deploys.
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
