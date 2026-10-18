@@ -41,7 +41,18 @@ describe('starting a demo', () => {
     assert.ok(quiz.stats.passed >= 2);
     assert.ok(quiz.questions.some((x) => x.asked > 0), 'sample tries count toward question stats');
     const files = (await owner.get('/api/resources')).body;
-    assert.equal((files.resources ?? files).length, 6, 'the Resources page is full');
+    const list = files.resources ?? files;
+    assert.equal(list.length, 9, 'the Resources page is full (3 x 3)');
+    assert.deepEqual(list.map((f) => f.category).sort(), [...Array(4).fill('Policy'), ...Array(5).fill('Resource')]);
+    for (const f of list) {
+      assert.ok(f.pages > 0 && f.previewUrl && f.updatedAt, `${f.title} has pages, a preview and a date`);
+    }
+    const handbook = list.find((f) => f.title === 'Clinician handbook');
+    assert.equal(handbook.pages, 42);
+    const dl = await owner.get(`/api/resources/${handbook.id}/download`);
+    assert.equal(dl.status, 200);
+    assert.equal(dl.body.subarray(0, 5).toString(), '%PDF-');
+    assert.equal((await owner.get(handbook.previewUrl)).headers.get('content-type'), 'image/png');
   });
 
   test('switching between owner and clinician stays inside your own copy', async () => {

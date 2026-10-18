@@ -27,15 +27,18 @@ export function SectionQuizPage() {
       }
     />
   )
-  if (page.loading && !page.data) return <>{crumbs()}<Spinner label="Loading the quiz" /></>
-  if (page.error || !page.data) return <>{crumbs()}<ErrorState message={page.error ?? 'Quiz not found.'} onRetry={page.reload} /></>
+  if (page.loading && !page.data) return <>{crumbs()}<div className="sq-stage"><Spinner label="Loading the quiz" /></div></>
+  if (page.error || !page.data) return <>{crumbs()}<div className="sq-stage"><ErrorState message={page.error ?? 'Quiz not found.'} onRetry={page.reload} /></div></>
   const d = page.data
   const name = d.section.subtitle || d.section.title
   return (
     <>
       {crumbs(name)}
-      <div className="sq">
-        <QuizFlow key={d.attempt?.id ?? 'intro'} d={d} name={name} />
+      {/* The stage fills the space under the breadcrumb, down to the bottom of the screen, and centres the card in it. */}
+      <div className="sq-stage">
+        <div className="sq">
+          <QuizFlow key={d.attempt?.id ?? 'intro'} d={d} name={name} />
+        </div>
       </div>
     </>
   )

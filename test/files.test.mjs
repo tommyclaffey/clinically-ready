@@ -3,6 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { ANGELA, JORDAN, OFFICE, setup } from './helpers.mjs';
+import { makePdf } from '../server/seed-files.mjs';
+import { DEMO_LIBRARY } from '../server/demolib.mjs';
 
 let t;
 before(async () => {
@@ -38,6 +40,38 @@ describe('download', () => {
   });
 });
 
+describe('previews', () => {
+  test('a PDF upload gets its page count and a first-page preview, scoped to the practice', async () => {
+    const office = await t.as(OFFICE);
+    const bytes = makePdf('Two page policy', ['Page one.']);
+    const r = await upload(office, { title: 'Policy PDF', category: 'Policy', filename: 'policy.pdf' }, bytes, 'application/pdf');
+    assert.equal(r.status, 200);
+    assert.equal(r.body.resource.pages, 1);
+    assert.equal(r.body.resource.previewUrl, `/api/resources/${r.body.resource.id}/preview`);
+    const jordan = await t.as(JORDAN);
+    const img = await jordan.get(r.body.resource.previewUrl);
+    assert.equal(img.status, 200);
+    assert.equal(img.headers.get('content-type'), 'image/png');
+    assert.deepEqual([...img.body.subarray(1, 4)], [...Buffer.from('PNG')]);
+    assert.equal((await t.client().get(r.body.resource.previewUrl)).status, 401);
+  });
+
+  test('a Word upload gets its page count from docProps and a layout preview', async () => {
+    const office = await t.as(OFFICE);
+    const lib = path.join(DEMO_LIBRARY, 'intake-packet.docx');
+    const r = await upload(office, { title: 'Intake', filename: 'intake.docx' }, fs.readFileSync(lib), 'application/octet-stream');
+    assert.equal(r.status, 200);
+    assert.equal(r.body.resource.pages, 6);
+    assert.ok(r.body.resource.previewUrl);
+  });
+
+  test('a file with no preview returns 404 on the preview route', async () => {
+    const office = await t.as(OFFICE);
+    const r = await upload(office, { title: 'Plain', filename: 'plain.txt' }, Buffer.from('hello'), 'text/plain');
+    assert.equal((await office.get(`/api/resources/${r.body.resource.id}/preview`)).status, 404);
+  });
+});
+
 describe('upload', () => {
   test('admin uploads an allowed type; stored under a random name', async () => {
     const office = await t.as(OFFICE);
@@ -47,7 +81,9 @@ describe('upload', () => {
     assert.equal(r.status, 200);
     assert.deepEqual(r.body.resource, {
       id: r.body.resource.id, title: 'Parking notes', fileType: 'TXT', sizeLabel: '32 B', category: 'Policy', lessonId: null,
+      pages: null, updatedAt: r.body.resource.updatedAt, previewUrl: null,
     });
+    assert.match(r.body.resource.updatedAt, /^\d{4}-\d{2}-\d{2}T/);
     const added = fs.readdirSync(uploadsDir()).filter((f) => !before.has(f));
     assert.equal(added.length, 1);
     assert.match(added[0], /^[0-9a-f]{32}\.txt$/);

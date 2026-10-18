@@ -1,7 +1,7 @@
-import type { ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { downloadUrl, type LessonCard, type Resource, type SectionQuizStatus } from '../api'
-import { fileExt, fileMeta, tileClass } from '../lib/format'
+import { fileExt, fileMeta, previewKind, tileClass, updatedLabel } from '../lib/format'
 import { CheckIcon, ChevronDownIcon, DownloadIcon, LockIcon, PlayDisc, QuizIcon, VideoIcon } from './Icons'
 
 /** 3px Blue Deep dot + uppercase label. */
@@ -88,22 +88,109 @@ export function FileTile({ resource, small = false }: { resource: Resource; smal
   )
 }
 
-/** Resource card: tile, title + meta, round download button. The whole card is one link. */
+/** A file's type in a small chip: PDF, DOCX… */
+const chipText = (r: Resource) => fileExt(r).toUpperCase().slice(0, 4) || 'FILE'
+
+/** Page 1 of the file (or a type illustration when there's no preview), with the type chip bottom-left. */
+export function DocPreview({ resource }: { resource: Resource }) {
+  const [failed, setFailed] = useState(false)
+  const showImage = Boolean(resource.previewUrl) && !failed
+  return (
+    <span className={`doc-preview ${showImage ? '' : 'doc-preview--art'}`} aria-hidden="true">
+      {showImage ? (
+        <img src={resource.previewUrl ?? ''} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />
+      ) : (
+        <DocArt kind={previewKind(resource)} />
+      )}
+      <span className={`type-chip ${tileClass(resource)}`}>{chipText(resource)}</span>
+    </span>
+  )
+}
+
+/** Type illustrations drawn on an 88 x 116 page: never a blank tile. */
+function DocArt({ kind }: { kind: ReturnType<typeof previewKind> }) {
+  const line = (y: number, w = 66, cls = 'art-line') => <rect key={`${cls}${y}`} className={cls} x="11" y={y} width={w} height="2" rx="1" />
+  let body: ReactNode
+  if (kind === 'form') {
+    body = [
+      <rect key="h" className="art-ink" x="11" y="11" width="44" height="4" rx="1" />,
+      ...[23, 41, 59].flatMap((y) => [line(y, 26), <rect key={`f${y}`} className="art-field" x="11.5" y={y + 4.5} width="65" height="8" rx="1.3" />]),
+    ]
+  } else if (kind === 'sheet') {
+    body = [
+      <rect key="h" className="art-ink" x="11" y="11" width="46" height="4" rx="1" />,
+      <rect key="hd" className="art-tint" x="11" y="23" width="66" height="8" />,
+      <rect key="g" className="art-field" x="11.5" y="23.5" width="65" height="58" />,
+      ...[35, 46, 58, 70].map((y) => <rect key={`r${y}`} className="art-rule" x="11" y={y} width="66" height="1" />),
+      <rect key="c1" className="art-rule" x="33" y="23" width="1" height="59" />,
+      <rect key="c2" className="art-rule" x="55" y="23" width="1" height="59" />,
+    ]
+  } else if (kind === 'slides') {
+    body = [
+      <rect key="s" className="art-field" x="9.5" y="30.5" width="69" height="40" rx="2" />,
+      <rect key="t" className="art-ink" x="17" y="40" width="40" height="4" rx="1" />,
+      <rect key="l1" className="art-line" x="17" y="50" width="54" height="2" rx="1" />,
+      <rect key="l2" className="art-line" x="17" y="55" width="44" height="2" rx="1" />,
+    ]
+  } else if (kind === 'image') {
+    body = [
+      <circle key="sun" className="art-tint" cx="60" cy="34" r="8" />,
+      <path key="m" className="art-accent" d="M11 80 L34 52 L50 70 L60 60 L77 80 Z" />,
+    ]
+  } else if (kind === 'video') {
+    body = [<circle key="c" className="art-tint" cx="44" cy="50" r="18" />, <path key="p" className="art-accent" d="M39 41 L53 50 L39 59 Z" />]
+  } else if (kind === 'archive') {
+    body = [0, 1, 2, 3, 4, 5, 6].map((i) => <rect key={i} className={i % 2 ? 'art-line' : 'art-ink'} x={i % 2 ? 44 : 40} y={14 + i * 8} width="4" height="5" rx="1" />)
+  } else {
+    body = [
+      <rect key="h" className="art-ink" x="11" y="12" width="53" height="5" rx="1" />,
+      line(23), line(28), line(33),
+      <rect key="a1" className="art-accent" x="11" y="42" width="35" height="4" rx="1" />,
+      line(51), line(56), line(62), line(67, 44),
+      <rect key="a2" className="art-accent" x="11" y="78" width="32" height="4" rx="1" />,
+    ]
+  }
+  return (
+    <svg className="doc-art" viewBox="0 0 88 116" preserveAspectRatio="xMidYMin meet" focusable="false">
+      {body}
+    </svg>
+  )
+}
+
+/** Resource card: first-page preview, title + meta, round download button. The whole card is one link. */
 export function ResourceCard({ resource, compact = false }: { resource: Resource; compact?: boolean }) {
+  const meta = fileMeta(resource)
+  const updated = updatedLabel(resource)
+  if (compact) {
+    return (
+      <a className="res-row" href={downloadUrl(resource.id)} download aria-label={`Download ${resource.title} (${meta.replace(/ {2}·  /g, ', ')})`}>
+        <FileTile resource={resource} small />
+        <span className="file-card__text">
+          <span className="row-title-sm">{resource.title}</span>
+          <span className="body-xs">{meta}</span>
+        </span>
+        <span className="dl dl--sm" aria-hidden="true">
+          <DownloadIcon size={15} />
+        </span>
+      </a>
+    )
+  }
   return (
     <a
-      className={compact ? 'res-row' : 'file-card'}
+      className="file-card"
       href={downloadUrl(resource.id)}
       download
-      aria-label={`Download ${resource.title} (${fileMeta(resource).replace(/ {2}·  /g, ', ')})`}
+      title={resource.title}
+      aria-label={`Download ${resource.title} (${[meta.replace(/ {2}·  /g, ', '), updated].filter(Boolean).join(', ')})`}
     >
-      <FileTile resource={resource} small={compact} />
+      <DocPreview resource={resource} />
       <span className="file-card__text">
-        <span className={compact ? 'row-title-sm' : 'row-title'}>{resource.title}</span>
-        <span className="body-xs">{fileMeta(resource)}</span>
+        <span className="file-card__title">{resource.title}</span>
+        <span className="body-xs">{meta}</span>
+        {updated && <span className="body-xs">{updated}</span>}
       </span>
-      <span className={`dl ${compact ? 'dl--sm' : ''}`} aria-hidden="true">
-        <DownloadIcon size={compact ? 15 : 16} />
+      <span className="dl dl--sm" aria-hidden="true">
+        <DownloadIcon size={15} />
       </span>
     </a>
   )

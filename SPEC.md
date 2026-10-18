@@ -72,7 +72,8 @@ quiz_questions(id INTEGER PK, practice_id INT, lesson_id INT, prompt TEXT,
                options TEXT,    -- JSON array of strings
                correct_index INT, explanation TEXT)
 resources(id INTEGER PK, practice_id INT, lesson_id INT NULL, category TEXT,  -- 'Resource' | 'Policy'
-          title TEXT, file_type TEXT, size_bytes INT, stored_name TEXT, created_at TEXT)
+          title TEXT, file_type TEXT, size_bytes INT, stored_name TEXT, created_at TEXT,
+          page_count INT, preview_name TEXT, updated_at TEXT)   -- v13 (Oct 18): card preview + meta
 checklist_items(id INTEGER PK, practice_id INT, position INT, title TEXT, detail TEXT)
 lesson_progress(user_id INT, lesson_id INT, practice_id INT, status TEXT,  -- 'started'|'complete'
                 position_sec INT DEFAULT 0, quiz_correct INT, completed_at TEXT,
@@ -141,7 +142,7 @@ Dates are ISO strings. `me` shape everywhere:
 | POST | /api/questions | body {lessonId?, body} -> {ok} |
 
 `LessonCard = {id,title,durationMin,label,status:'not_started'|'started'|'complete', posterUrl}`
-`Resource = {id,title,fileType,sizeLabel,category,lessonId}` (sizeLabel like "2.4 MB")
+`Resource = {id,title,fileType,sizeLabel,category,lessonId,pages,updatedAt,previewUrl}` (sizeLabel like "2.4 MB"; pages null when unknown; previewUrl = `/api/resources/:id/preview`, a PNG of page 1, or null → the card shows a type illustration)
 
 `GET /api/dashboard` ->
 ```json

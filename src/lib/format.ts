@@ -51,7 +51,26 @@ const TYPE_NAMES: Record<string, string> = {
 
 export const fileExt = (r: Resource) => (r.fileType || '').replace(/^\./, '').toLowerCase()
 export const fileTypeName = (r: Resource) => TYPE_NAMES[fileExt(r)] ?? fileExt(r).toUpperCase()
-export const fileMeta = (r: Resource) => [fileTypeName(r), r.sizeLabel].filter(Boolean).join('  ·  ')
+export const pagesLabel = (r: Resource) => (r.pages ? `${r.pages} ${r.pages === 1 ? 'page' : 'pages'}` : '')
+/** "PDF  ·  42 pages  ·  3.6 MB" */
+export const fileMeta = (r: Resource) => [fileTypeName(r), pagesLabel(r), r.sizeLabel].filter(Boolean).join('  ·  ')
+/** "Updated Sep 2026" from updatedAt, or '' when there's no date. */
+export function updatedLabel(r: Resource): string {
+  const d = r.updatedAt ? new Date(r.updatedAt) : null
+  if (!d || Number.isNaN(d.getTime())) return ''
+  return `Updated ${d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}`
+}
+/** Which illustration a file gets when it has no preview. */
+export function previewKind(r: Resource): 'doc' | 'form' | 'sheet' | 'slides' | 'image' | 'video' | 'archive' {
+  const e = fileExt(r)
+  if (e === 'docx' || e === 'doc') return 'form'
+  if (e === 'xlsx' || e === 'csv') return 'sheet'
+  if (e === 'pptx') return 'slides'
+  if (e === 'png' || e === 'jpg' || e === 'jpeg') return 'image'
+  if (e === 'mp4') return 'video'
+  if (e === 'zip') return 'archive'
+  return 'doc'
+}
 
 /** Tile colour per design: PDF = Blue Deep, Word = Slate, ZIP and others = Body. */
 export function tileClass(r: Resource): string {

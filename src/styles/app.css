@@ -311,13 +311,38 @@ select.input {
 
 .resources { display: flex; flex-direction: column; gap: 20px; width: 100%; }
 .section-head { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
-.file-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.file-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px 16px; }
+/* Resource card: preview, text and download all aligned from the top (Oct 18, from the approved site design). */
 .file-card {
-  display: flex; align-items: center; gap: 16px; padding: 18px; border-radius: 20px; background: var(--white);
+  display: flex; align-items: flex-start; gap: 12px; padding: 19px 13px; border-radius: 14px; background: var(--white);
   border: 1px solid transparent; height: 100%; transition: border-color .15s;
 }
 .file-card:hover { border-color: var(--border-ghost); }
 .file-card__text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.file-card .file-card__text { gap: 4px; padding-top: 1px; }
+.file-card__title {
+  font-size: 15px; line-height: 18px; font-weight: 500; color: var(--slate);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; /* one line, ellipsis as a safety */
+}
+.file-card .file-card__text .body-xs { line-height: 16px; }
+.file-card .file-card__title + .body-xs { margin-top: 2px; }
+.doc-preview {
+  position: relative; flex: none; width: 88px; height: 116px; border-radius: 4px; overflow: hidden;
+  background: var(--white); border: 1px solid var(--rule); box-shadow: 0 2px 6px rgba(28, 32, 34, .10);
+}
+.doc-preview img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+.doc-art { display: block; width: 100%; height: 100%; }
+.art-ink { fill: var(--slate); }
+.art-line { fill: var(--body); opacity: .55; }
+.art-accent { fill: var(--blue-deep); }
+.art-field { fill: none; stroke: var(--rule); stroke-width: 1; }
+.art-tint { fill: var(--blue-soft); }
+.art-rule { fill: var(--rule); }
+.type-chip {
+  position: absolute; left: 6px; bottom: 6px; height: 16px; min-width: 28px; padding: 0 5px; border-radius: 3px;
+  display: inline-flex; align-items: center; justify-content: center; /* centred both ways */
+  color: var(--white); font-size: 9px; line-height: 1; font-weight: 600; letter-spacing: .04em;
+}
 .tile {
   width: 44px; height: 52px; flex: none; border-radius: 10px; display: flex; align-items: flex-end; justify-content: center;
   padding-bottom: 9px; color: var(--white); font-size: 11px; line-height: 1; font-weight: 600; letter-spacing: .06em;
@@ -423,12 +448,12 @@ select.input {
 /* ---------- Other learner screens ---------- */
 .filters { display: flex; gap: 8px; flex-wrap: wrap; }
 .pill {
-  display: inline-flex; align-items: center; gap: 8px; padding: 10px 18px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; white-space: nowrap; padding: 10px 18px; border-radius: 999px;
   background: var(--white); border: 1px solid var(--rule); font-size: 14px; font-weight: 500; color: var(--slate);
 }
 .pill:hover { border-color: var(--border-ghost); }
 .pill.is-active { background: var(--slate); border-color: var(--slate); color: var(--white); }
-.pill__n { font-size: 12px; opacity: .85; }
+.pill__n { font-size: 12px; opacity: .85; line-height: 1; display: inline-flex; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; }
 .team-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 16px; }
 .team-card { padding: 24px; border-radius: 24px; display: flex; flex-direction: column; align-items: flex-start; gap: 16px; }
 .role-tag { font-size: 12px; font-weight: 500; letter-spacing: .04em; padding: 4px 12px; border-radius: 999px; background: var(--taupe); color: var(--slate); }
@@ -632,7 +657,10 @@ select.input {
   .continue__btns { flex-direction: column; align-items: flex-start; gap: 10px; }
   .path-card { padding: 24px 16px 12px; }
   .lesson-row { padding: 12px 10px 12px 8px; gap: 12px; }
-  .file-card { padding: 14px; }
+  .file-card { padding: 13px; }
+  .doc-preview { width: 64px; height: 83px; }
+  .type-chip { left: 4px; bottom: 4px; height: 12px; min-width: 22px; padding: 0 4px; font-size: 7.5px; border-radius: 2.5px; }
+  .file-card .file-card__text { padding-top: 0; }
   .side-card { padding: 24px 20px; }
 
   .crumbs { display: none; }
@@ -1195,6 +1223,10 @@ input.sr-only:focus-visible + .file-pick, .file-pick:focus-within { outline: 2px
 
 /* The quiz page */
 .sq { max-width: 760px; width: 100%; margin: 0 auto; }
+/* Section quiz: the card is centred both ways in the content area (the space right of the sidebar, under the breadcrumb).
+   .app is min-height 100vh and .main stretches to it, so the stage grows to the bottom of the viewport. */
+.sq-stage { flex: 1 0 auto; display: grid; place-items: center; width: 100%; }
+.main:has(> .sq-stage) { padding-bottom: 48px; }
 .sq-intro, .sq-result, .sq-take { padding: 36px 40px; border-radius: 26px; display: flex; flex-direction: column; gap: 14px; }
 .sq-intro__icon, .sq-result__badge { width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; background: var(--blue-wash); color: var(--blue-deep); margin-bottom: 4px; }
 .sq-locked { max-width: 640px; margin: 24px auto 0; }

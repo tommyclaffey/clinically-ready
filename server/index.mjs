@@ -12,7 +12,7 @@ import registerMessages from './routes/messages.mjs';
 import { loadProviders } from './oidc.mjs';
 import { s3FromEnv } from './s3.mjs';
 import { scheduleBackups } from './backup.mjs';
-import registerFiles from './routes/files.mjs';
+import registerFiles, { backfillPreviews } from './routes/files.mjs';
 import registerLearner from './routes/learner.mjs';
 import registerPaperwork from './routes/paperwork.mjs';
 import registerPeople from './routes/people.mjs';
@@ -150,6 +150,7 @@ export function startServer({
   };
   const stopBackups = s3 && backups ? scheduleBackups({ db: app.db, dataDir, s3 }) : null;
   const stopDemoSweep = scheduleDemoSweep(app.db, dataDir, () => {});
+  const stopBackfill = backfillPreviews(app.db, dataDir);
   if (production && !s3) console.warn('No BACKUP_S3_* variables: backups are OFF.');
   const router = buildRouter();
 
@@ -193,6 +194,7 @@ export function startServer({
         new Promise((done) => {
           stopBackups?.();
           stopDemoSweep();
+          stopBackfill();
           server.close(() => {
             app.db.close();
             done();

@@ -102,6 +102,12 @@ export interface Resource {
   sizeLabel: string
   category: 'Resource' | 'Policy' | string
   lessonId: number | null
+  /** Page count (PDF and Word), when known. */
+  pages?: number | null
+  /** ISO date the file was last updated (falls back to when it was added). */
+  updatedAt?: string | null
+  /** First-page preview image, when one could be made. */
+  previewUrl?: string | null
 }
 
 export interface ChecklistEntry {

@@ -12,7 +12,7 @@ before(async () => {
 after(() => t.close());
 
 const CARD_KEYS = ['durationMin', 'hasQuiz', 'hasVideo', 'id', 'label', 'posterUrl', 'resourceCount', 'status', 'title', 'videoPlanned'];
-const RESOURCE_KEYS = ['category', 'fileType', 'id', 'lessonId', 'sizeLabel', 'title'];
+const RESOURCE_KEYS = ['category', 'fileType', 'id', 'lessonId', 'pages', 'previewUrl', 'sizeLabel', 'title', 'updatedAt'];
 
 describe('helpers', () => {
   test('sizeLabel', () => {
@@ -65,6 +65,7 @@ describe('GET /api/dashboard', () => {
     assert.deepEqual(Object.keys(d.resources[0]).sort(), RESOURCE_KEYS);
     assert.deepEqual(d.resources[0], {
       id: d.resources[0].id, title: 'Clinician handbook', fileType: 'PDF', sizeLabel: '2.4 MB', category: 'Resource', lessonId: null,
+      pages: d.resources[0].pages, updatedAt: d.resources[0].updatedAt, previewUrl: d.resources[0].previewUrl,
     });
   });
 

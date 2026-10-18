@@ -1,0 +1,83 @@
+[
+  {
+    "title": "Clinician handbook",
+    "category": "Resource",
+    "file": "clinician-handbook.pdf",
+    "preview": "clinician-handbook.png",
+    "pages": 42,
+    "sizeBytes": 308019,
+    "daysAgo": 25
+  },
+  {
+    "title": "Documentation guide",
+    "category": "Resource",
+    "file": "documentation-guide.pdf",
+    "preview": "documentation-guide.png",
+    "pages": 18,
+    "sizeBytes": 127631,
+    "daysAgo": 55
+  },
+  {
+    "title": "Intake packet",
+    "category": "Resource",
+    "file": "intake-packet.docx",
+    "preview": "intake-packet.png",
+    "pages": 6,
+    "sizeBytes": 19179,
+    "daysAgo": 32
+  },
+  {
+    "title": "Session note template",
+    "category": "Resource",
+    "file": "session-note-template.docx",
+    "preview": "session-note-template.png",
+    "pages": 2,
+    "sizeBytes": 11751,
+    "daysAgo": 85
+  },
+  {
+    "title": "Supervision log",
+    "category": "Resource",
+    "file": "supervision-log.docx",
+    "preview": "supervision-log.png",
+    "pages": 3,
+    "sizeBytes": 27985,
+    "daysAgo": 115
+  },
+  {
+    "title": "Crisis & safety protocol",
+    "category": "Policy",
+    "file": "crisis-and-safety-protocol.pdf",
+    "preview": "crisis-and-safety-protocol.png",
+    "pages": 8,
+    "sizeBytes": 94446,
+    "daysAgo": 28
+  },
+  {
+    "title": "Telehealth policy",
+    "category": "Policy",
+    "file": "telehealth-policy.pdf",
+    "preview": "telehealth-policy.png",
+    "pages": 5,
+    "sizeBytes": 63626,
+    "daysAgo": 60
+  },
+  {
+    "title": "Social media policy",
+    "category": "Policy",
+    "file": "social-media-policy.pdf",
+    "preview": "social-media-policy.png",
+    "pages": 4,
+    "sizeBytes": 56335,
+    "daysAgo": 90
+  },
+  {
+    "title": "Billing and fees policy",
+    "category": "Policy",
+    "file": "billing-and-fees-policy.pdf",
+    "preview": "billing-and-fees-policy.png",
+    "pages": 6,
+    "sizeBytes": 83440,
+    "daysAgo": 150
+  }
+]

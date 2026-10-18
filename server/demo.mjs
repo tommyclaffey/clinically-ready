@@ -5,8 +5,7 @@ import { createHash, randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { now, tx } from './db.mjs';
-import { makePdf, makeDocx } from './seed-files.mjs';
-import { storeFile } from './routes/files.mjs';
+import { DEMO_LIBRARY } from './demolib.mjs';
 
 export const DEMO_HOURS = 24;
 export const DEMO_NAME = 'Cedar Grove Counseling';
@@ -200,15 +199,9 @@ const MORE_FORMS = [
   ['Social media policy', 'This is a sample policy for the demo.\n\nI will not connect with current or former clients on social media, and I will never post about a client, even without a name.'],
 ];
 
-// Handbooks and policies for the Resources page. Small generated files, deleted with the demo.
-const DEMO_FILES = [
-  { title: 'Clinician handbook', ext: 'pdf', category: 'Resource' },
-  { title: 'Documentation guide', ext: 'pdf', category: 'Resource' },
-  { title: 'Intake packet', ext: 'docx', category: 'Resource' },
-  { title: 'Crisis and safety protocol', ext: 'pdf', category: 'Policy' },
-  { title: 'Telehealth policy', ext: 'pdf', category: 'Policy' },
-  { title: 'Social media policy', ext: 'pdf', category: 'Policy' },
-];
+// Handbooks and policies for the Resources page: 9 real multi-page documents shared by every demo copy
+// (built by scripts/make-demo-library.mjs; nothing is copied per visitor).
+const DEMO_FILES = JSON.parse(fs.readFileSync(path.join(DEMO_LIBRARY, 'manifest.json'), 'utf8'));
 
 // Sample team: how far each person has got. Steps are counted in course order.
 const TEAM = [
@@ -253,16 +246,18 @@ export function createDemo(db, dataDir) {
     for (const [name, a] of Object.entries(APPS)) appIds[name] = ins('apps', { practice_id: pid, name, position: pos++, created_at: t, ...a });
     const formId = ins('forms', { practice_id: pid, kind: 'sign', title: 'Confidentiality agreement', body: AGREEMENT, template_url: '', required: 1, active: 1, version: 1, position: 1, created_at: t, updated_at: t });
     const moreForms = MORE_FORMS.map(([title, body], i) => ({ title, body, id: ins('forms', { practice_id: pid, kind: 'sign', title, body, template_url: '', required: 1, active: 1, version: 1, position: i + 2, created_at: t, updated_at: t }) }));
-    if (dataDir) for (const f of DEMO_FILES) {
-      const lines = [`${DEMO_NAME} · sample document for the demo.`, 'This file is generated for the demo and is deleted with it.'];
-      const bytes = f.ext === 'pdf' ? makePdf(f.title, lines) : makeDocx(f.title, lines);
-      const stored = storeFile(dataDir, pid, f.ext, bytes);
-      ins('resources', { practice_id: pid, lesson_id: null, category: f.category, title: f.title, file_type: f.ext, size_bytes: bytes.length, stored_name: stored, created_at: t });
+    for (const f of DEMO_FILES) {
+      const updated = hoursAgo(f.daysAgo * 24);
+      ins('resources', {
+        practice_id: pid, lesson_id: null, category: f.category, title: f.title, file_type: path.extname(f.file).slice(1),
+        size_bytes: f.sizeBytes, stored_name: `demo-library/${f.file}`, preview_name: f.preview ? `demo-library/${f.preview}` : '',
+        page_count: f.pages, created_at: updated, updated_at: updated,
+      });
     }
 
     const lessonIds = [];
     SECTIONS.forEach((s, si) => {
-      const weekId = ins('weeks', { practice_id: pid, position: si + 1, title: s.title, subtitle: s.subtitle, links: '[]', quiz_on: 1, quiz_draw: 3, quiz_pass: 67 });
+      const weekId = ins('weeks', { practice_id: pid, position: si + 1, title: s.title, subtitle: s.subtitle, links: '[]', quiz_on: 1, quiz_draw: 4, quiz_pass: 75 });
       s.weekId = weekId;
       s.qids = [];
       for (const p of s.pool) {
@@ -300,14 +295,15 @@ export function createDemo(db, dataDir) {
         const sec = SECTIONS[si];
         const tries = [...(m.failedFirst.includes(si) ? [false] : []), ...(m.passed.includes(si) ? [true] : [])];
         tries.forEach((ok, n) => {
-          const pick = ok ? [0, 1, 2] : [3, 4, 5];
+          const pick = ok ? [0, 1, 2, 3] : [2, 3, 4, 5];
+          const retry = ok && n > 0; // a pass after a failed try just makes it: 3 of 4 (75%)
           const items = pick.map((k, j) => {
             const p = sec.pool[k];
-            const wrong = !ok && j < 2; // a failed try: 2 of 3 wrong
+            const wrong = ok ? retry && j === 3 : j < 2; // a failed try: 2 of 4 wrong (50%)
             return { qid: sec.qids[k], prompt: p.prompt, options: p.options, correct: p.correct, explanation: p.explanation, choice: wrong ? (p.correct + 1) % p.options.length : p.correct };
           });
           const correct = items.filter((x) => x.choice === x.correct).length;
-          ins('quiz_attempts', { practice_id: pid, user_id: m.id, week_id: sec.weekId, items: JSON.stringify(items), pass_percent: 67, started_at: hoursAgo(40 - si * 8 - n), submitted_at: hoursAgo(39 - si * 8 - n), correct, total: 3, passed: correct >= 2 ? 1 : 0 });
+          ins('quiz_attempts', { practice_id: pid, user_id: m.id, week_id: sec.weekId, items: JSON.stringify(items), pass_percent: 75, started_at: hoursAgo(40 - si * 8 - n), submitted_at: hoursAgo(39 - si * 8 - n), correct, total: 4, passed: correct >= 3 ? 1 : 0 });
         });
       }
       if (m.signed) {
@@ -325,7 +321,7 @@ export function createDemo(db, dataDir) {
     ins('questions', { practice_id: pid, user_id: noor.id, lesson_id: lessonIds[1]?.id ?? null, body: 'My Zoom test call keeps dropping. Is there a backup link for telehealth?', created_at: hoursAgo(20) });
     ins('questions', { practice_id: pid, user_id: maya.id, lesson_id: lessonIds[0]?.id ?? null, body: 'Who is my backup supervisor when you are away?', created_at: hoursAgo(50), resolved_at: hoursAgo(45) });
     ins('notifications', { practice_id: pid, user_id: owner, kind: 'quiz', title: `${maya.name} passed the Clinical basics quiz (100%)`, body: '', link: `/admin/people/${maya.id}`, created_at: hoursAgo(5) });
-    ins('notifications', { practice_id: pid, user_id: owner, kind: 'quiz', title: `${luis.name} passed the First week quiz (67%)`, body: '', link: `/admin/people/${luis.id}`, created_at: hoursAgo(26) });
+    ins('notifications', { practice_id: pid, user_id: owner, kind: 'quiz', title: `${luis.name} passed the First week quiz (75%)`, body: '', link: `/admin/people/${luis.id}`, created_at: hoursAgo(26) });
     out = { practiceId: pid, owner, clinician: visitor };
   });
   return out;

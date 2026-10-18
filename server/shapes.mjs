@@ -115,6 +115,9 @@ export const resourceShape = (r) => ({
   sizeLabel: sizeLabel(r.size_bytes),
   category: r.category,
   lessonId: r.lesson_id ?? null,
+  pages: r.page_count ?? null,
+  updatedAt: r.updated_at || r.created_at || null,
+  previewUrl: r.preview_name ? `/api/resources/${r.id}/preview` : null,
 });
 
 /** `row` is a lessons row joined with the user's progress (status) and counts. */

@@ -137,6 +137,11 @@ const MIGRATIONS = [
   // v12 (Oct 10): the public demo. Each visitor gets a throwaway copy of a sample practice (is_demo = 1).
   `ALTER TABLE practices ADD COLUMN is_demo INT NOT NULL DEFAULT 0;
    CREATE INDEX practices_demo ON practices(is_demo, created_at);`,
+  // v13 (Oct 18): Resources cards show a first-page preview, the page count and when the file was updated.
+  // preview_name: NULL = not tried yet, '' = no preview possible (the card shows a type illustration).
+  `ALTER TABLE resources ADD COLUMN page_count INT;
+   ALTER TABLE resources ADD COLUMN preview_name TEXT;
+   ALTER TABLE resources ADD COLUMN updated_at TEXT;`,
 ];
 
 export function openDb(dataDir) {
