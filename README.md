@@ -1,5 +1,10 @@
 # Clinical Onboarding App
 
+> **About this repo.** This is the public copy of Clinically Ready, an onboarding app for counselling and therapy practices, designed and built by Tommy Claffey.
+> It holds the full product code and the demo practice (Cedar Grove Counseling, fictional). The first client's real training course is private and isn't included.
+> Live demo: https://web-production-1f8f7.up.railway.app/demo
+
+
 Onboarding for counselling and therapy practices. New clinicians sign in, watch video lessons,
 download resources, answer quick checks and work through a checklist. Practice owners invite
 staff, load their own content and see who has finished.
