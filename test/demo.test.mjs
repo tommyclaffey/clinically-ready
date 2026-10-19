@@ -1,5 +1,6 @@
 // The public demo: each visitor gets their own sample practice; nothing leaks to real practices or other visitors.
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
 import { after, before, describe, test } from 'node:test';
 import { sweepDemos } from '../server/demo.mjs';
 import { ANGELA, setup } from './helpers.mjs';
@@ -25,6 +26,15 @@ describe('starting a demo', () => {
     const first = weeks[0].lessons[0].id;
     const lesson = (await visitor.get(`/api/lessons/${first}`)).body.lesson;
     assert.equal(lesson.videoUrl, '/demo/welcome.mp4');
+    assert.equal(lesson.posterUrl, '/demo/poster.jpg', 'the first step keeps the original still');
+  });
+
+  test('every step has its own video still, and every still exists', async () => {
+    const weeks = (await visitor.get('/api/weeks')).body;
+    const posters = weeks.flatMap((w) => w.lessons.map((l) => l.posterUrl));
+    assert.equal(posters.length, 8);
+    assert.equal(new Set(posters).size, posters.length, 'no two steps share a still');
+    for (const p of posters) assert.ok(existsSync(new URL(`../public${p}`, import.meta.url)), `${p} is in public/`);
   });
 
   test('the owner view has a sample team with results to look at', async () => {

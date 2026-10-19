@@ -10,6 +10,17 @@ import { DEMO_LIBRARY } from './demolib.mjs';
 export const DEMO_HOURS = 24;
 export const DEMO_NAME = 'Cedar Grove Counseling';
 const POSTER = '/demo/poster.jpg';
+// Every step gets its own video still, so no two steps in the demo look the same (sources: public/demo/SOURCES.md).
+const POSTERS = {
+  'Welcome to Cedar Grove': POSTER,
+  'Set up your accounts': '/demo/posters/02-set-up-accounts.jpg',
+  'Sign your agreements': '/demo/posters/03-sign-agreements.jpg',
+  'What every note shows': '/demo/posters/04-notes.jpg',
+  'Safety first: when to consult': '/demo/posters/05-safety.jpg',
+  'Telehealth basics': '/demo/posters/06-telehealth.jpg',
+  'Your first session': '/demo/posters/07-first-session.jpg',
+  'Who to call': '/demo/posters/08-who-to-call.jpg',
+};
 const VIDEO = '/demo/welcome.mp4';
 
 const q = (prompt, options, correct, explanation) => ({ prompt, options, correct, explanation });
@@ -275,7 +286,7 @@ export function createDemo(db, dataDir) {
         blocks.push({ type: 'quiz' });
         const id = ins('lessons', {
           practice_id: pid, week_id: weekId, position: li + 1, title: l.title, label: l.label, presenter: 'Cedar Grove team',
-          duration_min: l.min, video_url: l.video || '', poster_url: POSTER, overview: l.overview, takeaways: JSON.stringify(l.takeaways),
+          duration_min: l.min, video_url: l.video || '', poster_url: POSTERS[l.title] ?? POSTER, overview: l.overview, takeaways: JSON.stringify(l.takeaways),
           transcript: '', content: JSON.stringify(l.content), blocks: JSON.stringify(blocks), updated_at: t,
         });
         ins('quiz_questions', { practice_id: pid, lesson_id: id, prompt: l.quiz.prompt, options: JSON.stringify(l.quiz.options), correct_index: l.quiz.correct, explanation: l.quiz.explanation });
