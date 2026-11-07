@@ -1406,7 +1406,7 @@ input.sr-only:focus-visible + .file-pick, .file-pick:focus-within { outline: 2px
 .demo-bar__btn:focus-visible { outline: 2px solid var(--white); outline-offset: 2px; }
 
 .tour { position: fixed; inset: 0; z-index: 100; pointer-events: none; }
-.tour__hl { position: fixed; border-radius: 16px; box-shadow: 0 0 0 3px var(--blue-deep), 0 0 0 9999px rgba(20, 24, 26, .42); transition: top .2s, left .2s, width .2s, height .2s; }
+.tour__hl { position: fixed; border-radius: 16px; box-shadow: 0 0 0 3px var(--blue-deep), 0 0 0 9999px rgba(20, 24, 26, .42); } /* no glide: it lands with the page */
 .tour__card { position: fixed; pointer-events: auto; background: var(--white); border-radius: 18px; padding: 18px 20px 16px; box-shadow: 0 18px 48px rgba(20, 24, 26, .25); display: flex; flex-direction: column; gap: 6px; }
 .tour__card--sheet { left: 12px; right: 12px; bottom: 12px; }
 .tour__count { font-size: 12px; font-weight: 500; letter-spacing: .08em; color: var(--blue-deep); text-transform: uppercase; }
@@ -1417,7 +1417,6 @@ input.sr-only:focus-visible + .file-pick, .file-pick:focus-within { outline: 2px
 .tour__nav { display: flex; gap: 8px; }
 .tour__btn { font-size: 14px; font-weight: 500; padding: 9px 18px; border-radius: 999px; background: var(--slate); color: var(--white); }
 .tour__btn--ghost { background: transparent; color: var(--blue-deep); box-shadow: inset 0 0 0 1px var(--border-ghost); }
-@media (prefers-reduced-motion: reduce) { .tour__hl { transition: none; } }
 
 .signin__generic { display: flex; flex-direction: column; gap: 18px; align-items: flex-start; }
 .signin__demo { font-size: 15px; font-weight: 500; color: var(--white); padding: 10px 18px; border-radius: 999px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .6); }

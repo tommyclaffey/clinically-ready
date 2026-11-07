@@ -160,35 +160,56 @@ export function DemoTour() {
   }, [tour, open])
 
   const tip = tips[i]
-  // Keep the highlight on the target as the page scrolls or resizes.
+  // Nov 6, Tommy (on the Baldwin demo's copy of this tour): the box was "trying to find it … moving kind of in a sloppy way": a smooth
+  // scroll, repeated measuring and a glide all ran at once. Now the page, the box and the card land together in one frame.
   useLayoutEffect(() => {
     if (!tip) return
     const el = find(tip.target)
     if (!el) return
-    const r0 = el.getBoundingClientRect()
-    el.scrollIntoView({ block: r0.height > window.innerHeight * 0.6 ? 'start' : 'center', behavior: 'smooth' })
+    const tall = el.getBoundingClientRect().height > window.innerHeight * 0.6
+    el.scrollIntoView({ block: tall ? 'start' : 'center', inline: 'nearest', behavior: 'instant' as ScrollBehavior })
+    setRect(el.getBoundingClientRect())
+    // After that it only moves if the page itself does: scrolling, resizing, or something loading above it.
     let frame = 0
     const measure = () => {
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(() => setRect(el.getBoundingClientRect()))
     }
-    measure()
-    const settle = setInterval(measure, 120)
-    const stop = setTimeout(() => clearInterval(settle), 900)
+    const ro = new ResizeObserver(measure)
+    ro.observe(document.documentElement)
+    ro.observe(el)
     window.addEventListener('scroll', measure, true)
     window.addEventListener('resize', measure)
     return () => {
       cancelAnimationFrame(frame)
-      clearInterval(settle)
-      clearTimeout(stop)
+      ro.disconnect()
       window.removeEventListener('scroll', measure, true)
       window.removeEventListener('resize', measure)
     }
   }, [tip])
 
+  // The card only exists once the box is measured, so focus waits for that too (it used to miss, and Tab wandered the page behind).
+  const shown = !!tip && !!rect
   useEffect(() => {
-    if (tip) nextRef.current?.focus({ preventScroll: true })
-  }, [tip])
+    if (shown) nextRef.current?.focus({ preventScroll: true })
+  }, [shown, i])
+  // While a tip is up, the keyboard belongs to it: Tab cycles its buttons, the arrow keys step through the tips, Escape closes.
+  useEffect(() => {
+    if (!shown) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { close(); return }
+      if (e.key === 'ArrowRight') { e.preventDefault(); if (i < tips.length - 1) setI(i + 1); else close(); return }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); if (i > 0) setI(i - 1); return }
+      if (e.key !== 'Tab') return
+      const f = [...document.querySelectorAll<HTMLElement>('.tour__card button')]
+      if (!f.length) return
+      e.preventDefault()
+      const at = f.indexOf(document.activeElement as HTMLElement)
+      f[at < 0 ? f.length - 1 : (at + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus({ preventScroll: true })
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [shown, i, tips.length, close])
 
   if (!tip || !rect) return null
   const vw = window.innerWidth
@@ -203,17 +224,18 @@ export function DemoTour() {
   const narrow = vw < 640
   const cardW = 340
   const below = vh - (hl.top + hl.height) > 210
+  const fills = !below && hl.top < 240 // a target that fills the screen: the card sits on top of it, never off the top
   const style: React.CSSProperties = narrow
     ? {}
     : {
-        top: below ? hl.top + hl.height + 12 : Math.max(12, hl.top - 12),
+        top: below ? hl.top + hl.height + 12 : fills ? vh - 24 : Math.max(12, hl.top - 12),
         left: Math.min(Math.max(12, hl.left), vw - cardW - 12),
         transform: below ? undefined : 'translateY(-100%)',
         width: cardW,
       }
 
   return (
-    <div className="tour" onKeyDown={(e) => { if (e.key === 'Escape') close() }}>
+    <div className="tour">
       <div className="tour__hl" style={hl} aria-hidden="true" />
       <div className={`tour__card ${narrow ? 'tour__card--sheet' : ''}`} style={style} role="dialog" aria-modal="false" aria-labelledby={titleId}>
         <p className="tour__count">{i + 1} of {tips.length}</p>
