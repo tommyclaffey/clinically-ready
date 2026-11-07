@@ -9,7 +9,8 @@ export function markDemo(on: boolean) {
 
 export async function restartDemoIfRefreshed() {
   const nav = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined
-  if (nav?.type !== 'reload' || location.pathname === '/demo') return
+  // Inside another page's frame a refresh of that page reports "navigate", so every load there counts.
+  if ((nav?.type !== 'reload' && window.self === window.top) || location.pathname === '/demo') return
   try { if (!localStorage.getItem(FLAG)) return } catch { return }
   try {
     const s = await api.demoRestart()
