@@ -1,6 +1,6 @@
 // The public demo: one click makes a visitor their own copy of the sample practice and signs them in.
 import { createSession, sessionCookie } from '../auth.mjs';
-import { createDemo } from '../demo.mjs';
+import { createDemo, deleteDemo } from '../demo.mjs';
 import { fail, readJson } from '../http.mjs';
 import { meShape, practiceShape } from '../shapes.mjs';
 
@@ -29,6 +29,18 @@ export default function register(router) {
     const demo = createDemo(ctx.db, ctx.app.dataDir);
     return signIn(ctx, as === 'owner' ? demo.owner : demo.clinician);
   });
+
+  // Nov 7, Tommy: "have all my demo restart after a refresh". A refresh swaps this visitor's copy for a new one, same role.
+  // Not counted against the start limit: it replaces a copy, so nothing piles up.
+  router.add('POST', '/api/demo/restart', (ctx) => {
+    if (!ctx.practice?.is_demo) fail(404, 'Not found.');
+    const demo = createDemo(ctx.db, ctx.app.dataDir);
+    const owner = ctx.user.name === OWNER_NAME;
+    const old = ctx.practice.id;
+    const session = signIn(ctx, owner ? demo.owner : demo.clinician);
+    deleteDemo(ctx.db, old, ctx.app.dataDir);
+    return session;
+  }, { auth: 'user' });
 
   // Switch between the owner and the new clinician inside your own demo copy.
   router.add('POST', '/api/demo/switch', (ctx) => {

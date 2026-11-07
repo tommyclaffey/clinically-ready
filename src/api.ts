@@ -714,6 +714,7 @@ export const api = {
   // Public demo
   demoStart: (as: 'clinician' | 'owner') => request<Session>('POST', '/api/demo/start', { as }, { quiet401: true }),
   demoSwitch: () => request<Session>('POST', '/api/demo/switch'),
+  demoRestart: () => request<Session>('POST', '/api/demo/restart', undefined, { quiet401: true }),
 
   // Learner
   dashboard: () => request<Dashboard>('GET', '/api/dashboard'),

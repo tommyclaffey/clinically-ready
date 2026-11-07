@@ -1,75 +1,60 @@
-// The public demo's banner and walkthrough. The banner says what you're looking at and lets you switch between
-// the practice owner and a new clinician. The walkthrough shows a few tips the first time you open each key page.
-import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
+// The public demo's banner, welcome card and tour (Nov 7, Tommy: "the best tour style I've seen is this one", Growth's).
+//   • The welcome card says what this is and who you are, with four things to try. It opens when the demo opens; the DEMO pill brings it back.
+//   • The tour is one walk through the real pages, a step at a time. It replaces the tips that fired page by page.
+//   • Nothing here is saved, on purpose: a refresh starts the demo over. lib/demoRestart.ts swaps the data for a fresh copy.
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../api'
 import { useAuth } from '../auth'
 
-type Tip = { target: string; title: string; body: string }
-type Tour = { key: string; role: 'owner' | 'clinician'; match: RegExp; tips: Tip[] }
+type Stop = { path: string | (() => string | null); match?: RegExp; target: string; title: string; body: string }
 
-const TOURS: Tour[] = [
-  {
-    key: 'home', role: 'clinician', match: /^\/$/,
-    tips: [
-      { target: '.progress-card', title: 'Your progress', body: 'Every step you finish moves this bar. The sample course has 3 sections and 8 steps.' },
-      { target: '.continue, .quiz-due', title: 'Pick up where you left off', body: 'Every step starts with a short video, then the reading and a quick check.' },
-      { target: '.path-card', title: 'Section by section', body: 'Later sections stay locked until you pass the quiz at the end of the one before.' },
-      { target: '.quiz-row', title: 'The section quiz', body: 'It opens when every step above is done, and asks new questions each try.' },
-    ],
-  },
-  {
-    key: 'lesson', role: 'clinician', match: /^\/lesson\/\d+$/,
-    tips: [
-      { target: '.lesson-col > .video-block, .lesson-col .player', title: 'Video first', body: 'Each step leads with a video the practice records in Loom or uploads. This one is a short sample.' },
-      { target: '.page-blocks', title: 'Built like a page', body: 'Under the video: the reading, takeaways, links and tools, in the order the practice built them.' },
-      { target: '.quick-check', title: 'A quick check', body: 'Instant feedback on 1 question, so the main point sticks.' },
-      { target: '.lesson-nav__next', title: 'Move on', body: 'Mark it complete to go to the next step. Finish the section to open its quiz.' },
-    ],
-  },
-  {
-    key: 'quiz', role: 'clinician', match: /^\/quiz\/\d+$/,
-    tips: [
-      { target: '.sq-facts', title: 'How the quiz works', body: 'Each try draws a few questions from a bigger pool, with the answers shuffled.' },
-      { target: '.sq-actions', title: 'Pass to move on', body: 'Pass it and the next section opens. Fail it and you get a new set of questions.' },
-    ],
-  },
-  {
-    key: 'team', role: 'owner', match: /^\/admin$/,
-    tips: [
-      { target: '.table-card', title: 'Your team at a glance', body: 'Where every new clinician is: steps done, checklist, paperwork, last seen.' },
-      { target: '.person-link', title: 'Every answer, every signature', body: 'Open a person to see each quiz try, each agreement they signed, and what’s left.' },
-    ],
-  },
-  {
-    key: 'content', role: 'owner', match: /^\/admin\/content$/,
-    tips: [
-      { target: '.co-bar', title: 'The whole onboarding', body: 'Sections, steps, which quizzes are on and which videos are still to record.' },
-      { target: '.co-section', title: 'Sections fold up', body: 'Each section is one line. Open one to see its steps and reorder them.' },
-      { target: '.co-quiz', title: 'Quizzes between sections', body: 'Every section can end with a quiz that locks the next one until it’s passed.' },
-      { target: '.co-step__main', title: 'Edit on the page', body: 'Open a step to edit it exactly as your clinicians see it.' },
-    ],
-  },
-  {
-    key: 'step', role: 'owner', match: /^\/admin\/content\/step\/\d+$/,
-    tips: [
-      { target: '.eb-title', title: 'Type right on the page', body: 'This is the step as clinicians see it. Click any text and type.' },
-      { target: '.eb-page > .eb-insert:last-child', title: 'Add anything', body: 'Hover between blocks and press +: text, lists, video, links, paperwork, a tool or a quiz.' },
-      { target: '.eb-side', title: 'Switches', body: 'Turn the video, quick check and downloads on or off for this step.' },
-      { target: '.save-bar', title: 'Save when ready', body: 'Nothing changes for clinicians until you save. ⌘S works too.' },
-    ],
-  },
-  {
-    key: 'pool', role: 'owner', match: /^\/admin\/content\/quiz\/\d+$/,
-    tips: [
-      { target: '.pool', title: 'The question pool', body: 'Write more questions than each try asks, so a retake gets a fresh set.' },
-      { target: '.eb-side', title: 'Quiz settings', body: 'Questions per try, the pass mark, and whether it locks the next section.' },
-    ],
-  },
+// Stops that open "the first step" or "the first quiz" read the address off the pages before, and keep it so Back still gets there.
+const LINKS = { lesson: 'a[href^="/lesson/"]', step: 'a[href^="/admin/content/step/"]', pool: 'a[href^="/admin/content/quiz/"]' }
+const remembered: Record<string, string> = {}
+const rememberLinks = () => {
+  for (const [k, sel] of Object.entries(LINKS)) {
+    const href = document.querySelector(sel)?.getAttribute('href')
+    if (href) remembered[k] = href
+  }
+}
+const linkOf = (k: string) => () => { rememberLinks(); return remembered[k] ?? null }
+const LESSON = { path: linkOf('lesson'), match: /^\/lesson\/\d+$/ }
+const STEP = { path: linkOf('step'), match: /^\/admin\/content\/step\/\d+$/ }
+const POOL = { path: linkOf('pool'), match: /^\/admin\/content\/quiz\/\d+$/ }
+const PILL = '.demo-pill'
+
+const CLINICIAN: Stop[] = [
+  { path: '/', target: '.progress-card', title: 'Your progress', body: 'Every step you finish moves this bar. The sample course has 3 sections and 8 steps.' },
+  { path: '/', target: '.path-card', title: 'Section by section', body: 'Later sections stay locked until you pass the quiz at the end of the one before.' },
+  { path: '/', target: '.quiz-row', title: 'The section quiz', body: 'It opens when every step above is done, and asks new questions each try.' },
+  { ...LESSON, target: '.lesson-col > .video-block, .lesson-col .player', title: 'Video first', body: 'Each step leads with a video the practice records in Loom or uploads.' },
+  { ...LESSON, target: '.page-blocks', title: 'Built like a page', body: 'Under the video: the reading, takeaways, links and tools, in the order the practice built them.' },
+  { ...LESSON, target: '.quick-check', title: 'A quick check', body: 'Instant feedback on 1 question, so the main point sticks.' },
+  { path: '/paperwork', target: '.main h1', title: 'Paperwork', body: 'Agreements to read and sign, kept with the rest of the onboarding.' },
+  { path: '/paperwork', target: PILL, title: 'That’s the tour', body: 'Click DEMO anytime for the welcome card or to take the tour again. Refresh and the demo starts over.' },
+]
+const OWNER: Stop[] = [
+  { path: '/admin/content', target: '.co-bar', title: 'The whole onboarding', body: 'Sections, steps, which quizzes are on and which videos are still to record.' },
+  { path: '/admin/content', target: '.co-section', title: 'Sections fold up', body: 'Each section is one line. Open one to see its steps and reorder them.' },
+  { path: '/admin/content', target: '.co-quiz', title: 'Quizzes between sections', body: 'Every section can end with a quiz that locks the next one until it’s passed.' },
+  { ...STEP, target: '.eb-title', title: 'Type right on the page', body: 'This is the step as clinicians see it. Click any text and type.' },
+  { ...STEP, target: '.eb-side', title: 'Switches', body: 'Turn the video, quick check and downloads on or off for this step.' },
+  { ...POOL, target: '.pool', title: 'The question pool', body: 'Write more questions than each try asks, so a retake gets a fresh set.' },
+  { path: '/admin', target: '.table-card', title: 'Your team at a glance', body: 'Where every new clinician is: steps done, checklist, paperwork, last seen.' },
+  { path: '/admin', target: '.person-link', title: 'Every answer, every signature', body: 'Open a person to see each quiz try, each agreement they signed, and what’s left.' },
+  { path: '/admin', target: PILL, title: 'That’s the tour', body: 'Click DEMO anytime for the welcome card or to take the tour again. Refresh and the demo starts over.' },
 ]
 
-const seenKey = (practiceId: number, key: string) => `cr-tour:${practiceId}:${key}`
-const RESTART = 'cr-tour-restart'
+// Held outside React: every page mounts its own Shell, and the walk has to carry on across them.
+let welcomeOpen = false, welcomed = false, step: number | null = null
+const listeners = new Set<() => void>()
+const emit = () => listeners.forEach((l) => l())
+const subscribe = (l: () => void) => { listeners.add(l); return () => { listeners.delete(l) } }
+export const openWelcome = () => { welcomed = true; welcomeOpen = true; step = null; emit() }
+const closeWelcome = () => { welcomeOpen = false; emit() }
+const setStep = (i: number | null) => { step = i; welcomeOpen = false; emit() }
 
 /** The first visible element for a selector list, or null. */
 function find(selector: string): HTMLElement | null {
@@ -78,6 +63,22 @@ function find(selector: string): HTMLElement | null {
     if (r.width > 0 && r.height > 0) return el
   }
   return null
+}
+
+/** While the card is up the keyboard belongs to it: Tab cycles its buttons, Escape closes. */
+function trapKeys(card: () => HTMLElement | null, close: () => void, more?: (e: KeyboardEvent) => void) {
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') { close(); return }
+    more?.(e)
+    if (e.key !== 'Tab') return
+    const f = [...(card()?.querySelectorAll<HTMLElement>('button, a[href]') ?? [])]
+    if (!f.length) return
+    e.preventDefault()
+    const at = f.indexOf(document.activeElement as HTMLElement)
+    f[at < 0 ? 0 : (at + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus({ preventScroll: true })
+  }
+  window.addEventListener('keydown', onKey, true)
+  return () => window.removeEventListener('keydown', onKey, true)
 }
 
 export function DemoBar() {
@@ -91,6 +92,7 @@ export function DemoBar() {
       const s = await api.demoSwitch()
       adopt(s)
       navigate(s.me.role === 'owner' ? '/admin/content' : '/')
+      openWelcome()
     } catch {
       navigate('/demo')
     } finally {
@@ -103,7 +105,6 @@ export function DemoBar() {
   }
   return (
     <div className="demo-bar" role="region" aria-label="Demo">
-      <span className="demo-bar__tag">Demo</span>
       <p className="demo-bar__text">
         You’re in <strong>Cedar Grove Counseling</strong>, a sample practice, as the <strong>{owner ? 'practice owner' : 'new clinician'}</strong>.
       </p>
@@ -111,146 +112,182 @@ export function DemoBar() {
         <button type="button" className="demo-bar__btn demo-bar__btn--main" onClick={() => void switchRole()} disabled={busy}>
           {owner ? 'See it as a new clinician' : 'See it as the owner'}
         </button>
-        <button type="button" className="demo-bar__btn" onClick={() => window.dispatchEvent(new Event(RESTART))}>Show me around</button>
+        <button type="button" className="demo-bar__btn" onClick={() => setStep(0)}>Show me around</button>
         <button type="button" className="demo-bar__btn" onClick={() => void leave()}>Leave demo</button>
       </div>
     </div>
   )
 }
 
-export function DemoTour() {
-  const { me, practice } = useAuth()
-  const location = useLocation()
-  const role = me?.role === 'owner' ? 'owner' : 'clinician'
-  const tour = TOURS.find((t) => t.role === role && t.match.test(location.pathname)) ?? null
-  const [tips, setTips] = useState<Tip[]>([])
-  const [i, setI] = useState(0)
-  const [rect, setRect] = useState<DOMRect | null>(null)
-  const nextRef = useRef<HTMLButtonElement>(null)
+const TRY_CLINICIAN = [
+  { title: 'Start your first step', body: 'A short video, the reading and a quick check', to: '/onboarding' },
+  { title: 'Sign the paperwork', body: 'Agreements to read and sign, with a record kept', to: '/paperwork' },
+  { title: 'Find a resource', body: 'Forms, guides and links the practice keeps in one place', to: '/resources' },
+  { title: 'Meet the team', body: 'Who’s who at the practice', to: '/team' },
+]
+const TRY_OWNER = [
+  { title: 'Edit the onboarding', body: 'Sections, steps and quizzes, edited right on the page', to: '/admin/content' },
+  { title: 'See your team', body: 'Where every new clinician is, and every quiz try', to: '/admin' },
+  { title: 'Check the videos', body: 'What’s recorded and what’s still to record', to: '/admin/videos' },
+  { title: 'Review the paperwork', body: 'Every agreement, and who has signed it', to: '/admin/paperwork' },
+]
+
+function WelcomeCard({ owner }: { owner: boolean }) {
+  const navigate = useNavigate()
+  const open = useSyncExternalStore(subscribe, () => welcomeOpen)
+  const card = useRef<HTMLDivElement>(null)
+  const start = useRef<HTMLButtonElement>(null)
   const titleId = useId()
-
-  const open = useCallback((t: Tour) => {
-    const found = t.tips.filter((tip) => find(tip.target))
-    if (!found.length) return
-    setTips(found)
-    setI(0)
-  }, [])
-  const close = useCallback(() => {
-    if (tour && practice) localStorage.setItem(seenKey(practice.id, tour.key), '1')
-    setTips([])
-    setRect(null)
-  }, [tour, practice])
-
-  // First visit to a page with a tour: wait for it to render, then start.
   useEffect(() => {
-    setTips([])
-    setRect(null)
-    if (!tour || !practice || localStorage.getItem(seenKey(practice.id, tour.key))) return
-    const timer = setTimeout(() => open(tour), 900)
-    return () => clearTimeout(timer)
-  }, [tour, practice, open])
+    if (!open) return
+    start.current?.focus({ preventScroll: true })
+    return trapKeys(() => card.current, closeWelcome)
+  }, [open])
+  if (!open) return null
+  return createPortal(
+    <div className="dw-scrim" onClick={closeWelcome}>
+      <div ref={card} className="dw" role="dialog" aria-modal="true" aria-labelledby={titleId} onClick={(e) => e.stopPropagation()}>
+        <span className="dw-pill">Live demo</span>
+        <h2 id={titleId}>Welcome to Clinically Ready</h2>
+        <p className="dw-lede">Onboarding for therapy practices. New clinicians work through videos, reading, quick checks and quizzes, and the owner sees where everyone is.</p>
+        <p className="dw-persona">{owner ? 'You’re the owner of Cedar Grove Counseling' : 'You’re a new clinician at Cedar Grove Counseling'}, a sample practice. Everyone here is made up, and nothing touches a real practice. Refresh anytime to start over.</p>
+        <p className="dw-label">Try these</p>
+        <ol className="dw-steps">
+          {(owner ? TRY_OWNER : TRY_CLINICIAN).map((s, i) => (
+            <li key={s.title}>
+              <button type="button" className="dw-step" onClick={() => { closeWelcome(); navigate(s.to) }}>
+                <span className="dw-num" aria-hidden="true">{i + 1}</span>
+                <span className="dw-text"><strong>{s.title}</strong><span>{s.body}</span></span>
+                <svg className="dw-chev" width="8" height="12" viewBox="0 0 8 12" aria-hidden="true"><path d="M1.5 1.5 6 6l-4.5 4.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </button>
+            </li>
+          ))}
+        </ol>
+        <div className="dw-foot">
+          <span className="dw-credit">Designed and engineered by <a href="https://www.tommyclaffey.com" target="_blank" rel="noopener noreferrer">Tommy Claffey</a></span>
+          <div className="dw-actions">
+            <button type="button" className="tour__btn tour__btn--ghost" onClick={closeWelcome}>Explore on my own</button>
+            <button type="button" ref={start} className="tour__btn" onClick={() => setStep(0)}>Take the tour</button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
+  )
+}
 
-  // "Show me around" restarts this page's tour (or says there isn't one).
-  useEffect(() => {
-    const restart = () => {
-      if (tour) open(tour)
-    }
-    window.addEventListener(RESTART, restart)
-    return () => window.removeEventListener(RESTART, restart)
-  }, [tour, open])
+function Tour({ owner }: { owner: boolean }) {
+  const i = useSyncExternalStore(subscribe, () => step)
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
+  const stops = owner ? OWNER : CLINICIAN
+  const stop = i === null ? null : stops[i] ?? null
+  const [el, setEl] = useState<HTMLElement | null>(null)
+  const [rect, setRect] = useState<DOMRect | null>(null)
+  const dir = useRef(1)
+  const nextRef = useRef<HTMLButtonElement>(null)
+  const card = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+  const end = useCallback(() => setStep(null), [])
+  const move = useCallback((by: number) => {
+    dir.current = by
+    const to = (i ?? 0) + by
+    if (to >= stops.length) setStep(null); else if (to >= 0) setStep(to)
+  }, [i, stops.length])
 
-  const tip = tips[i]
-  // Nov 6, Tommy (on the Baldwin demo's copy of this tour): the box was "trying to find it … moving kind of in a sloppy way": a smooth
-  // scroll, repeated measuring and a glide all ran at once. Now the page, the box and the card land together in one frame.
+  // Get to the stop's page, then wait for its element. Anything that never shows is skipped in the direction you were going.
   useLayoutEffect(() => {
-    if (!tip) return
-    const el = find(tip.target)
-    if (!el) return
+    setEl(null); setRect(null)
+    if (!stop) return
+    const onPage = stop.match ? stop.match.test(pathname) : pathname === stop.path
+    if (!onPage) {
+      const to = typeof stop.path === 'function' ? stop.path() : stop.path
+      if (to) navigate(to); else move(dir.current)
+      return
+    }
+    const first = find(stop.target)
+    if (first) { setEl(first); return }
+    let tries = 0
+    const timer = setInterval(() => {
+      const found = find(stop.target)
+      if (found) { clearInterval(timer); setEl(found) }
+      else if (++tries > 60) { clearInterval(timer); move(dir.current) } // 3 seconds
+    }, 50)
+    return () => clearInterval(timer)
+  }, [stop, pathname, navigate, move])
+
+  // The page, the box and the card land together in one frame. After that it only moves if the page itself does.
+  useLayoutEffect(() => {
+    if (!el || !stop) return
+    el.style.scrollMarginTop = '24px'
     const tall = el.getBoundingClientRect().height > window.innerHeight * 0.6
     el.scrollIntoView({ block: tall ? 'start' : 'center', inline: 'nearest', behavior: 'instant' as ScrollBehavior })
     setRect(el.getBoundingClientRect())
-    // After that it only moves if the page itself does: scrolling, resizing, or something loading above it.
+    rememberLinks()
     let frame = 0
     const measure = () => {
       cancelAnimationFrame(frame)
-      frame = requestAnimationFrame(() => setRect(el.getBoundingClientRect()))
+      frame = requestAnimationFrame(() => { if (el.isConnected) setRect(el.getBoundingClientRect()); else setEl(find(stop.target)) })
     }
     const ro = new ResizeObserver(measure)
-    ro.observe(document.documentElement)
-    ro.observe(el)
+    ro.observe(document.documentElement); ro.observe(el)
     window.addEventListener('scroll', measure, true)
     window.addEventListener('resize', measure)
-    return () => {
-      cancelAnimationFrame(frame)
-      ro.disconnect()
-      window.removeEventListener('scroll', measure, true)
-      window.removeEventListener('resize', measure)
-    }
-  }, [tip])
+    return () => { cancelAnimationFrame(frame); ro.disconnect(); window.removeEventListener('scroll', measure, true); window.removeEventListener('resize', measure) }
+  }, [el, stop])
 
-  // The card only exists once the box is measured, so focus waits for that too (it used to miss, and Tab wandered the page behind).
-  const shown = !!tip && !!rect
-  useEffect(() => {
-    if (shown) nextRef.current?.focus({ preventScroll: true })
-  }, [shown, i])
-  // While a tip is up, the keyboard belongs to it: Tab cycles its buttons, the arrow keys step through the tips, Escape closes.
+  const shown = !!stop && !!rect
+  useEffect(() => { if (shown) nextRef.current?.focus({ preventScroll: true }) }, [shown, i])
   useEffect(() => {
     if (!shown) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { close(); return }
-      if (e.key === 'ArrowRight') { e.preventDefault(); if (i < tips.length - 1) setI(i + 1); else close(); return }
-      if (e.key === 'ArrowLeft') { e.preventDefault(); if (i > 0) setI(i - 1); return }
-      if (e.key !== 'Tab') return
-      const f = [...document.querySelectorAll<HTMLElement>('.tour__card button')]
-      if (!f.length) return
-      e.preventDefault()
-      const at = f.indexOf(document.activeElement as HTMLElement)
-      f[at < 0 ? f.length - 1 : (at + (e.shiftKey ? -1 : 1) + f.length) % f.length].focus({ preventScroll: true })
-    }
-    window.addEventListener('keydown', onKey, true)
-    return () => window.removeEventListener('keydown', onKey, true)
-  }, [shown, i, tips.length, close])
+    return trapKeys(() => card.current, end, (e) => {
+      if (e.key === 'ArrowRight') { e.preventDefault(); move(1) }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); move(-1) }
+    })
+  }, [shown, end, move])
 
-  if (!tip || !rect) return null
-  const vw = window.innerWidth
-  const vh = window.innerHeight
-  const pad = 8
-  const hl = {
-    top: Math.max(rect.top - pad, 4),
-    left: Math.max(rect.left - pad, 4),
-    width: Math.min(rect.width + pad * 2, vw - 8),
-    height: Math.min(rect.bottom + pad, vh - 4) - Math.max(rect.top - pad, 4),
+  if (i === null || !stop) return null
+  if (!rect) return createPortal(<div className="tour"><div className="tour__block" /><div className="tour__dim" /></div>, document.body)
+
+  const vw = window.innerWidth, vh = window.innerHeight, pad = 8
+  const top = Math.max(rect.top - pad, 4)
+  const hl = { top, left: Math.max(rect.left - pad, 4), width: Math.min(rect.width + pad * 2, vw - 8), height: Math.max(Math.min(rect.bottom + pad, vh - 4) - top, 0) }
+  const narrow = vw < 640, cardW = 340
+  const below = vh - (hl.top + hl.height) > 260
+  const fills = !below && hl.top < 280 // a target that fills the screen: the card sits on top of it, never off the top
+  const style: React.CSSProperties = narrow ? {} : {
+    top: below ? hl.top + hl.height + 12 : fills ? vh - 24 : Math.max(12, hl.top - 12),
+    left: Math.min(Math.max(12, hl.left), vw - cardW - 12),
+    transform: below ? undefined : 'translateY(-100%)',
+    width: cardW,
   }
-  const narrow = vw < 640
-  const cardW = 340
-  const below = vh - (hl.top + hl.height) > 210
-  const fills = !below && hl.top < 240 // a target that fills the screen: the card sits on top of it, never off the top
-  const style: React.CSSProperties = narrow
-    ? {}
-    : {
-        top: below ? hl.top + hl.height + 12 : fills ? vh - 24 : Math.max(12, hl.top - 12),
-        left: Math.min(Math.max(12, hl.left), vw - cardW - 12),
-        transform: below ? undefined : 'translateY(-100%)',
-        width: cardW,
-      }
-
-  return (
+  return createPortal(
     <div className="tour">
+      <div className="tour__block" />
       <div className="tour__hl" style={hl} aria-hidden="true" />
-      <div className={`tour__card ${narrow ? 'tour__card--sheet' : ''}`} style={style} role="dialog" aria-modal="false" aria-labelledby={titleId}>
-        <p className="tour__count">{i + 1} of {tips.length}</p>
-        <h2 id={titleId} className="tour__title">{tip.title}</h2>
-        <p className="tour__body">{tip.body}</p>
+      <div ref={card} className={`tour__card ${narrow ? 'tour__card--sheet' : ''}`} style={style} role="dialog" aria-modal="false" aria-labelledby={titleId}>
+        <p className="tour__count">Step {i + 1} of {stops.length}</p>
+        <h2 id={titleId} className="tour__title">{stop.title}</h2>
+        <p className="tour__body">{stop.body}</p>
+        <div className="tour__dots" aria-hidden="true">
+          {stops.map((_, n) => <span key={n} className={n === i ? 'on' : n < i ? 'done' : ''} />)}
+        </div>
         <div className="tour__actions">
-          <button type="button" className="tour__skip" onClick={close}>Skip tour</button>
+          <button type="button" className="tour__skip" onClick={end}>End tour</button>
           <span className="tour__nav">
-            {i > 0 && <button type="button" className="tour__btn tour__btn--ghost" onClick={() => setI(i - 1)}>Back</button>}
-            <button type="button" ref={nextRef} className="tour__btn" onClick={() => (i < tips.length - 1 ? setI(i + 1) : close())}>
-              {i < tips.length - 1 ? 'Next' : 'Got it'}
-            </button>
+            {i > 0 && <button type="button" className="tour__btn tour__btn--ghost" onClick={() => move(-1)}>Back</button>}
+            <button type="button" ref={nextRef} className="tour__btn" onClick={() => move(1)}>{i < stops.length - 1 ? 'Next' : 'Finish'}</button>
           </span>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
+}
+
+export function DemoTour() {
+  const { me } = useAuth()
+  const owner = me?.role === 'owner'
+  useEffect(() => { if (!welcomed) openWelcome() }, [])
+  return <><WelcomeCard owner={owner} /><Tour owner={owner} /></>
 }

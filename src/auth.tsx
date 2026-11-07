@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { markDemo } from './lib/demoRestart'
 import { Navigate, useLocation } from 'react-router-dom'
 import { PRODUCT_NAME, rememberOrg } from './lib/brand'
 import { api, ApiError, setUnauthorizedHandler, type Me, type Practice, type Role, type Session } from './api'
@@ -43,6 +44,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const adopt = useCallback((s: Session) => {
     if (!s.practice.isDemo) rememberOrg(s.practice.slug) // a demo copy is deleted within a day
+    markDemo(!!s.practice.isDemo)
     setMe(s.me)
     setPractice(s.practice)
     setStatus('authed')
@@ -50,6 +52,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const clear = useCallback(() => {
+    markDemo(false)
     setMe(null)
     setPractice(null)
     setStatus('anon')

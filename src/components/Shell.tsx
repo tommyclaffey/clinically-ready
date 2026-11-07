@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type ComponentType, type FormEvent, type ReactNode } from 'react'
-import { DemoBar, DemoTour } from './DemoTour'
+import { DemoBar, DemoTour, openWelcome } from './DemoTour'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { api, type AppNotification } from '../api'
 import { relativeDate } from '../lib/format'
@@ -160,13 +160,16 @@ export function Shell({ children }: { children: ReactNode }) {
       <aside className="sidebar">
         <div className="sb-top">
           <div className="sb-brand-row">
-            <Link className="sb-brand" to="/">
-              <BrandMark className="sb-logo" logoUrl={practice?.logoUrl} name={practice?.name ?? ''} />
-              <span className="sb-brand__text">
-                <span className="brand">{practice?.name ?? terms.portal}</span>
-                <span className="brand-sub">{terms.portal}</span>
-              </span>
-            </Link>
+            <div className="sb-brand-group">
+              <Link className="sb-brand" to="/">
+                <BrandMark className="sb-logo" logoUrl={practice?.logoUrl} name={practice?.name ?? ''} />
+                <span className="sb-brand__text">
+                  <span className="brand">{practice?.name ?? terms.portal}</span>
+                  <span className="brand-sub">{terms.portal}</span>
+                </span>
+              </Link>
+              {practice?.isDemo && <button type="button" className="demo-pill" onClick={openWelcome}>DEMO</button>}
+            </div>
             <button type="button" className="icon-btn sb-mobile-out" onClick={doSignOut} aria-label="Sign out">
               <SignOutIcon />
             </button>

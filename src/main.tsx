@@ -3,9 +3,10 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import { AppRoutes } from './App'
 import { AuthProvider } from './auth'
+import { restartDemoIfRefreshed } from './lib/demoRestart'
 import './styles/app.css'
 
-createRoot(document.getElementById('root')!).render(
+const mount = () => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
@@ -14,3 +15,5 @@ createRoot(document.getElementById('root')!).render(
     </BrowserRouter>
   </StrictMode>,
 )
+
+void restartDemoIfRefreshed().finally(mount)

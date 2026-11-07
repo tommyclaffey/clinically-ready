@@ -74,6 +74,16 @@ describe('starting a demo', () => {
     assert.equal(back.body.me.role, 'clinician');
   });
 
+  test('a refresh swaps the copy for a fresh one, same role, and the old one goes', async () => {
+    const someone = await t.client();
+    const first = await someone.post('/api/demo/start', { as: 'owner' });
+    const r = await someone.post('/api/demo/restart');
+    assert.equal(r.body.me.role, 'owner');
+    assert.equal(r.body.practice.isDemo, true);
+    assert.notEqual(r.body.practice.id, first.body.practice.id);
+    assert.equal(t.app.db.prepare('SELECT COUNT(*) AS n FROM practices WHERE id = ?').get(first.body.practice.id).n, 0);
+  });
+
   test('visitors can’t see each other or a real practice', async () => {
     const other = await t.client();
     await other.post('/api/demo/start', { as: 'clinician' });
