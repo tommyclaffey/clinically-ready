@@ -219,3 +219,13 @@ test('demo cookie is embeddable on https; real sessions stay Lax; logout clears 
   assert.ok(Array.isArray(cleared) && cleared.length === 2);
   assert.ok(cleared.some((c) => /SameSite=None; Partitioned/.test(c)));
 });
+
+test('real sign-in on https also expires the demo cookie', async () => {
+  const { sessionCookies } = await import('../server/auth.mjs');
+  const real = sessionCookies('t', { secure: true });
+  assert.ok(Array.isArray(real) && real.length === 2);
+  assert.match(real[0], /SameSite=Lax/);
+  assert.match(real[1], /SameSite=None; Partitioned/);
+  assert.match(real[1], /Max-Age=0/);
+  assert.equal(typeof sessionCookies('t', { secure: false }), 'string');
+});

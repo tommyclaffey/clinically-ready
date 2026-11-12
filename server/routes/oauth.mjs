@@ -4,7 +4,7 @@
 //   • Verified Google email that matches an existing user            -> linked, signed in
 //   • Signed-in user pressing "Connect" on the Account page           -> linked to them
 // Anything else is refused with a plain reason on the sign-in page.
-import { createSession, newToken, sessionCookie, sha256, SSO_SESSION_HOURS } from '../auth.mjs';
+import { createSession, newToken, sessionCookies, sha256, SSO_SESSION_HOURS } from '../auth.mjs';
 import { now, tx } from '../db.mjs';
 import { fail } from '../http.mjs';
 import { authorizeUrl, emailOf, exchangeCode, newVerifier, OidcError, verifyIdToken } from '../oidc.mjs';
@@ -180,7 +180,7 @@ export default function register(router) {
     const token = createSession(ctx.db, user.id, { hours: SSO_SESSION_HOURS });
     ctx.db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(now(), user.id);
     return redirect(ctx, row.next, [
-      sessionCookie(token, { secure: ctx.app.secure, hours: SSO_SESSION_HOURS }),
+      ...[sessionCookies(token, { secure: ctx.app.secure, hours: SSO_SESSION_HOURS })].flat(),
       stateCookie('', { secure: ctx.app.secure, maxAge: 0 }),
     ]);
   });

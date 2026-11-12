@@ -7,7 +7,7 @@ import {
   createSession,
   hashPassword,
   PASSWORD_SESSION_HOURS,
-  sessionCookie,
+  sessionCookies,
   sha256,
   verifyPassword,
 } from '../auth.mjs';
@@ -21,7 +21,7 @@ const BAD_LOGIN = 'Email or password is incorrect.';
 function signedIn(ctx, user) {
   const token = createSession(ctx.db, user.id, { hours: PASSWORD_SESSION_HOURS });
   ctx.db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(now(), user.id);
-  ctx.headers['Set-Cookie'] = sessionCookie(token, { secure: ctx.app.secure, hours: PASSWORD_SESSION_HOURS });
+  ctx.headers['Set-Cookie'] = sessionCookies(token, { secure: ctx.app.secure, hours: PASSWORD_SESSION_HOURS });
   const practice = ctx.db.prepare('SELECT * FROM practices WHERE id = ?').get(user.practice_id);
   return { me: meShape(user), practice: practiceShape(practice) };
 }

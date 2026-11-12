@@ -87,6 +87,13 @@ export function sessionCookie(token, { secure, hours = SESSION_DAYS * 24, embedd
   return parts.join('; ');
 }
 
+/** A real (non-demo) session cookie, plus an expired demo cookie on https so a demo started in this browser can't
+ *  leave a second session cookie of the same name behind (Nov 12). */
+export function sessionCookies(token, opts) {
+  const c = sessionCookie(token, opts);
+  return opts.secure ? [c, `${SESSION_COOKIE}=; HttpOnly; SameSite=None; Partitioned; Path=/; Max-Age=0; Secure`] : c;
+}
+
 /** Clears both kinds of session cookie (a demo's embeddable one lives in its own partition). */
 export function clearCookie({ secure }) {
   const lax = `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? '; Secure' : ''}`;
