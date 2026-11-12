@@ -30,7 +30,10 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'same-origin',
-  'X-Frame-Options': 'DENY',
+  // Nov 12, Tommy: the live demo opens inside his portfolio's link viewer (an iframe on
+  // tommyclaffey.com), the way Growth and Queue do. Only these origins may frame the app;
+  // every other site is still refused, as X-Frame-Options: DENY did before.
+  'Content-Security-Policy': "frame-ancestors 'self' https://tommyclaffey.com https://www.tommyclaffey.com",
 };
 
 function buildRouter() {

@@ -11,7 +11,7 @@ export const CLINICIAN_NAME = 'You (new clinician)';
 
 function signIn(ctx, userId) {
   const token = createSession(ctx.db, userId, { hours: DEMO_SESSION_HOURS });
-  ctx.headers['Set-Cookie'] = sessionCookie(token, { secure: ctx.app.secure, hours: DEMO_SESSION_HOURS });
+  ctx.headers['Set-Cookie'] = sessionCookie(token, { secure: ctx.app.secure, hours: DEMO_SESSION_HOURS, embeddable: true });
   const user = ctx.db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
   const practice = ctx.db.prepare('SELECT * FROM practices WHERE id = ?').get(user.practice_id);
   return { me: meShape(user), practice: practiceShape(practice) };

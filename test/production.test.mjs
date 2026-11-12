@@ -32,7 +32,9 @@ test('serves dist files with security headers', async () => {
   assert.equal(r.status, 200);
   assert.match(r.headers.get('content-type'), /javascript/);
   assert.match(r.headers.get('cache-control'), /immutable/);
-  assert.equal(r.headers.get('x-frame-options'), 'DENY');
+  // Only the portfolio may frame the app (Nov 12); everyone else is refused.
+  assert.equal(r.headers.get('x-frame-options'), null);
+  assert.equal(r.headers.get('content-security-policy'), "frame-ancestors 'self' https://tommyclaffey.com https://www.tommyclaffey.com");
   assert.equal(r.headers.get('x-content-type-options'), 'nosniff');
   assert.equal(r.headers.get('referrer-policy'), 'same-origin');
 });

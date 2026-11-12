@@ -75,14 +75,23 @@ export function sessionUser(db, token) {
   return user || null;
 }
 
-export function sessionCookie(token, { secure, hours = SESSION_DAYS * 24 }) {
-  const parts = [`${SESSION_COOKIE}=${token}`, 'HttpOnly', 'SameSite=Lax', 'Path=/', `Max-Age=${Math.round(hours * 3600)}`];
+/**
+ * `embeddable` is for demo sessions only: inside the portfolio's iframe a SameSite=Lax cookie is
+ * never sent, so the demo would sign in and then lose its session. SameSite=None + Partitioned
+ * (CHIPS) keeps the cookie to that one embedding site. Real accounts always stay SameSite=Lax.
+ */
+export function sessionCookie(token, { secure, hours = SESSION_DAYS * 24, embeddable = false }) {
+  const site = embeddable && secure ? ['SameSite=None', 'Partitioned'] : ['SameSite=Lax'];
+  const parts = [`${SESSION_COOKIE}=${token}`, 'HttpOnly', ...site, 'Path=/', `Max-Age=${Math.round(hours * 3600)}`];
   if (secure) parts.push('Secure');
   return parts.join('; ');
 }
 
+/** Clears both kinds of session cookie (a demo's embeddable one lives in its own partition). */
 export function clearCookie({ secure }) {
-  return `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? '; Secure' : ''}`;
+  const lax = `${SESSION_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secure ? '; Secure' : ''}`;
+  if (!secure) return lax;
+  return [lax, `${SESSION_COOKIE}=; HttpOnly; SameSite=None; Partitioned; Path=/; Max-Age=0; Secure`];
 }
 
 /** Counts login failures per key (email + IP) in a sliding window. In-memory, per server. */

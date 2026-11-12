@@ -153,7 +153,8 @@ describe('access', () => {
     assert.equal(res.status, 200);
     assert.equal(res.headers.get('x-content-type-options'), 'nosniff');
     assert.equal(res.headers.get('referrer-policy'), 'same-origin');
-    assert.equal(res.headers.get('x-frame-options'), 'DENY');
+    assert.equal(res.headers.get('x-frame-options'), null);
+    assert.match(res.headers.get('content-security-policy'), /frame-ancestors 'self' https:\/\/tommyclaffey\.com https:\/\/www\.tommyclaffey\.com/);
   });
 
   test('bad JSON -> 400, body over 1 MB -> 413', async () => {
@@ -201,4 +202,20 @@ describe('secrets never leak', () => {
       assert.ok(!all.includes(bad), `leaked ${bad}`);
     }
   });
+});
+
+test('demo cookie is embeddable on https; real sessions stay Lax; logout clears both', async () => {
+  const { sessionCookie, clearCookie } = await import('../server/auth.mjs');
+  const demo = sessionCookie('t', { secure: true, hours: 12, embeddable: true });
+  assert.match(demo, /SameSite=None/);
+  assert.match(demo, /Partitioned/);
+  assert.match(demo, /Secure/);
+  const real = sessionCookie('t', { secure: true });
+  assert.match(real, /SameSite=Lax/);
+  assert.doesNotMatch(real, /Partitioned/);
+  // Without https a None cookie would be rejected, so the demo falls back to Lax locally.
+  assert.match(sessionCookie('t', { secure: false, embeddable: true }), /SameSite=Lax/);
+  const cleared = clearCookie({ secure: true });
+  assert.ok(Array.isArray(cleared) && cleared.length === 2);
+  assert.ok(cleared.some((c) => /SameSite=None; Partitioned/.test(c)));
 });
