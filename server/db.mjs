@@ -147,6 +147,11 @@ const MIGRATIONS = [
   `CREATE TABLE password_resets(
      token_hash TEXT PRIMARY KEY, user_id INT NOT NULL, created_at TEXT, expires_at TEXT, used_at TEXT);
    CREATE INDEX password_resets_user ON password_resets(user_id);`,
+  // v15 (Nov 19): the error log behind the nightly alert (server/routes/ops.mjs). Kept 90 days.
+  `CREATE TABLE errors(
+     id INTEGER PRIMARY KEY, at TEXT NOT NULL, kind TEXT NOT NULL, message TEXT, stack TEXT, path TEXT,
+     user_id INT, practice_id INT);
+   CREATE INDEX errors_at ON errors(at);`,
 ];
 
 export function openDb(dataDir) {

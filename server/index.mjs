@@ -1,4 +1,5 @@
 // Entry point: startServer() for tests and `node server/index.mjs` for dev/production.
+import registerOps, { logError, purgeErrors } from './routes/ops.mjs';
 import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -50,6 +51,7 @@ function buildRouter() {
   registerApps(router);
   registerSectionQuiz(router);
   registerDemo(router);
+  registerOps(router);
   return router;
 }
 
@@ -156,6 +158,8 @@ export function startServer({
   };
   const stopBackups = s3 && backups ? scheduleBackups({ db: app.db, dataDir, s3 }) : null;
   const stopDemoSweep = scheduleDemoSweep(app.db, dataDir, () => {});
+  purgeErrors(app.db); // Nov 19: the error log keeps 90 days
+  setInterval(() => purgeErrors(app.db), 864e5).unref();
   const stopBackfill = backfillPreviews(app.db, dataDir);
   if (production && !s3) console.warn('No BACKUP_S3_* variables: backups are OFF.');
   const router = buildRouter();
@@ -184,7 +188,10 @@ export function startServer({
       sendJson(res, 404, { error: 'Not found.' });
     } catch (err) {
       const status = err instanceof HttpError ? err.status : 500;
-      if (status === 500) console.error(err);
+      if (status === 500) {
+        console.error(err);
+        logError(app.db, { message: err?.message || String(err), stack: err?.stack, path: `${req.method} ${url.pathname}` }); // Nov 19: error alerts
+      }
       if (res.headersSent) return res.destroy();
       // Drain an unread body so the client sees this reply, not a broken pipe; hang up if it's huge.
       if (!req.tooLarge) await drain(req);
