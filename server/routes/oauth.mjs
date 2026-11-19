@@ -4,6 +4,7 @@
 //   • Verified Google email that matches an existing user            -> linked, signed in
 //   • Signed-in user pressing "Connect" on the Account page           -> linked to them
 // Anything else is refused with a plain reason on the sign-in page.
+import { mailOn } from '../mail.mjs';
 import { createSession, newToken, sessionCookies, sha256, SSO_SESSION_HOURS } from '../auth.mjs';
 import { now, tx } from '../db.mjs';
 import { fail } from '../http.mjs';
@@ -64,6 +65,7 @@ export default function register(router) {
   router.add('GET', '/api/auth/providers', (ctx) => ({
     google: Boolean(ctx.app.oidc.google),
     microsoft: Boolean(ctx.app.oidc.microsoft),
+    email: mailOn(ctx.app), // Nov 19: Forgot Password sends a link (server/mail.mjs)
   }));
 
   // Step 1: remember who's asking (state + PKCE verifier + nonce), then send them to the provider.

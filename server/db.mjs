@@ -142,6 +142,11 @@ const MIGRATIONS = [
   `ALTER TABLE resources ADD COLUMN page_count INT;
    ALTER TABLE resources ADD COLUMN preview_name TEXT;
    ALTER TABLE resources ADD COLUMN updated_at TEXT;`,
+  // v14 (Nov 19): Forgot Password links (server/routes/auth.mjs). Only the token's hash is stored; single use; a newer
+  // link cancels older ones.
+  `CREATE TABLE password_resets(
+     token_hash TEXT PRIMARY KEY, user_id INT NOT NULL, created_at TEXT, expires_at TEXT, used_at TEXT);
+   CREATE INDEX password_resets_user ON password_resets(user_id);`,
 ];
 
 export function openDb(dataDir) {

@@ -1,8 +1,11 @@
 // Sign in/out, signup (new practice), and invite acceptance.
 import { notInDemo } from './demo.mjs';
+import { mailOn, resetEmail, sendMail } from '../mail.mjs';
 import {
   MIN_PASSWORD,
+  RESET_HOURS,
   burnPasswordCheck,
+  newToken,
   clearCookie,
   createSession,
   hashPassword,
@@ -36,6 +39,18 @@ function slugFor(db, name) {
   let slug = base;
   for (let i = 2; db.prepare('SELECT 1 FROM practices WHERE slug = ?').get(slug); i++) slug = `${base}-${i}`;
   return slug;
+}
+
+/** The user behind an unused, unexpired reset link, or null. */
+function findReset(db, token) {
+  return (
+    db
+      .prepare(
+        `SELECT r.token_hash, u.* FROM password_resets r JOIN users u ON u.id = r.user_id
+         WHERE r.token_hash = ? AND r.used_at IS NULL AND r.expires_at > ? AND u.active = 1`,
+      )
+      .get(sha256(token), now()) || null
+  );
 }
 
 /** Pending, unexpired invite for a raw token, or null. */
@@ -146,6 +161,69 @@ export default function register(router) {
     if (!invite) fail(404, 'This invite link is invalid or has expired.');
     const practice = ctx.db.prepare('SELECT * FROM practices WHERE id = ?').get(invite.practice_id);
     return { email: invite.email, name: invite.name || '', practiceName: practice.name, terms: termsOf(practice), org: publicOrgShape(practice) };
+  });
+
+  // Forgot Password (Nov 19). Always the same answer, whether or not the email has an account, so it never reveals who
+  // does. When mail is on and the account can use a password, a single-use link goes out (newer cancels older).
+  router.add('POST', '/api/auth/forgot', async (ctx) => {
+    const body = await readJson(ctx.req);
+    const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : '';
+    if (!mailOn(ctx.app)) return { ok: true, sent: false };
+    if (!email || !email.includes('@')) fail(400, 'Enter the email you sign in with.');
+    // 3 an hour per email; 30 an hour per network (a whole office shares one address)
+    if (ctx.app.resetLimiter.blocked(`forgot|${email}`) || ctx.app.mailLimiter.blocked(`forgot-ip|${ctx.ip}`)) {
+      fail(429, 'We’ve sent a few links already. Check your inbox, or try again in an hour.');
+    }
+    ctx.app.resetLimiter.fail(`forgot|${email}`);
+    ctx.app.mailLimiter.fail(`forgot-ip|${ctx.ip}`);
+    const user = ctx.db.prepare('SELECT * FROM users WHERE email = ? AND active = 1').get(email);
+    const practice = user && ctx.db.prepare('SELECT * FROM practices WHERE id = ?').get(user.practice_id);
+    if (user && practice && !practice.is_demo && signInOf(practice).password) {
+      const token = newToken();
+      tx(ctx.db, () => {
+        ctx.db.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL').run(user.id);
+        ctx.db
+          .prepare('INSERT INTO password_resets(token_hash, user_id, created_at, expires_at) VALUES (?,?,?,?)')
+          .run(sha256(token), user.id, now(), new Date(Date.now() + RESET_HOURS * 3600_000).toISOString());
+      });
+      const mail = resetEmail({ name: user.name, practice: practice.name, url: `${ctx.app.publicOrigin}/reset/${token}`, hours: RESET_HOURS });
+      try {
+        await sendMail({ to: user.email, ...mail });
+      } catch (e) {
+        console.error('reset email', e.message); // the answer stays the same either way
+      }
+    }
+    return { ok: true, sent: true };
+  });
+
+  router.add('GET', '/api/auth/reset/:token', (ctx) => {
+    const user = findReset(ctx.db, ctx.params.token);
+    if (!user) fail(404, 'This reset link has expired or was already used.');
+    const practice = ctx.db.prepare('SELECT * FROM practices WHERE id = ?').get(user.practice_id);
+    return { email: user.email, practiceName: practice.name, org: publicOrgShape(practice) };
+  });
+
+  router.add('POST', '/api/auth/reset/:token', async (ctx) => {
+    const body = await readJson(ctx.req);
+    const found = findReset(ctx.db, ctx.params.token);
+    if (!found) fail(404, 'This reset link has expired or was already used.');
+    const practice = ctx.db.prepare('SELECT * FROM practices WHERE id = ?').get(found.practice_id);
+    if (!signInOf(practice).password) fail(403, 'Your organisation signs in with Google or Microsoft. Use those buttons instead.');
+    const password = v.password(body.password, MIN_PASSWORD);
+    const hash = await hashPassword(password);
+    tx(ctx.db, () => {
+      // Re-check inside the transaction so a link can only be used once.
+      const claimed = ctx.db
+        .prepare('UPDATE password_resets SET used_at = ? WHERE token_hash = ? AND used_at IS NULL')
+        .run(now(), found.token_hash);
+      if (claimed.changes !== 1) fail(404, 'This reset link has expired or was already used.');
+      ctx.db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hash, found.id);
+      ctx.db.prepare('DELETE FROM sessions WHERE user_id = ?').run(found.id); // signed out everywhere
+      ctx.db.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL').run(found.id);
+    });
+    ctx.app.limiter.reset(`${found.email}|${ctx.ip}`);
+    const user = ctx.db.prepare('SELECT * FROM users WHERE id = ?').get(found.id);
+    return signedIn(ctx, user);
   });
 
   router.add('POST', '/api/invites/:token/accept', async (ctx) => {

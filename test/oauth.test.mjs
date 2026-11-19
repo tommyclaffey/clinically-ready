@@ -302,7 +302,7 @@ describe('token checks', () => {
     const r = await new Browser().get('/api/auth/oauth/github/start');
     assert.equal(r.status, 404);
     const list = await (await new Browser().get('/api/auth/providers')).json();
-    assert.deepEqual(list, { google: true, microsoft: true });
+    assert.deepEqual(list, { google: true, microsoft: true, email: false }); // email: Forgot Password links (Nov 19), off without Resend
   });
 });
 

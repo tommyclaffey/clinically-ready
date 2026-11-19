@@ -144,6 +144,9 @@ export function startServer({
     trustProxy: process.env.TRUST_PROXY === '1',
     limiter: new LoginLimiter(),
     demoLimiter: new LoginLimiter({ max: 12, windowMs: 60 * 60 * 1000 }),
+    // Nov 19: Forgot Password (3 an hour per address) and emailed invites (30 an hour per sender)
+    resetLimiter: new LoginLimiter({ max: 3, windowMs: 60 * 60 * 1000 }),
+    mailLimiter: new LoginLimiter({ max: 30, windowMs: 60 * 60 * 1000 }),
     signupOpen,
     oidc: loadProviders(process.env, oidc),
     publicOrigin,

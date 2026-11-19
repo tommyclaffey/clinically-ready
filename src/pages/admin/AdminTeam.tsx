@@ -1,4 +1,4 @@
-import { useId, useState, type FormEvent } from 'react'
+import { useEffect, useId, useState, type FormEvent } from 'react'
 import { api, type AdminUser, type JobPosition, type Role } from '../../api'
 import { useAuth } from '../../auth'
 import { CopyIcon } from '../../components/Icons'
@@ -203,7 +203,13 @@ function InviteForm({ roles, positions, onCreated }: { roles: Role[]; positions:
   const [link, setLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [positionId, setPositionId] = useState('')
+  const [mailOn, setMailOn] = useState(false)
+  const [emailedTo, setEmailedTo] = useState<string | null>(null)
   const ids = { email: useId(), name: useId(), title: useId(), role: useId(), link: useId(), pos: useId() }
+  // Nov 19: when the app can send email, invites are emailed too (the link stays here to copy)
+  useEffect(() => {
+    api.providers().then((p) => setMailOn(Boolean(p.email))).catch(() => setMailOn(false))
+  }, [])
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -211,9 +217,12 @@ function InviteForm({ roles, positions, onCreated }: { roles: Role[]; positions:
     setError(null)
     setLink(null)
     setCopied(false)
+    setEmailedTo(null)
     try {
-      const r = await api.createInvite({ email: email.trim(), name: name.trim(), title: title.trim(), role, positionId: positionId ? Number(positionId) : null })
+      const to = email.trim()
+      const r = await api.createInvite({ email: to, name: name.trim(), title: title.trim(), role, positionId: positionId ? Number(positionId) : null })
       setLink(new URL(r.inviteUrl, window.location.origin).toString())
+      setEmailedTo(r.emailed ? to : null)
       setEmail('')
       setName('')
       setTitle('')
@@ -238,7 +247,11 @@ function InviteForm({ roles, positions, onCreated }: { roles: Role[]; positions:
   return (
     <section className="card form-card" aria-labelledby="invite-title">
       <h2 id="invite-title" className="card-serif">Invite someone</h2>
-      <p className="body-xs">No email is sent. Copy the link and send it to them yourself. Links work once and expire in 7 days.</p>
+      <p className="body-xs">
+        {mailOn
+          ? 'We email them a link to set up their account. You can copy it too. Links work once and expire in 14 days.'
+          : 'No email is sent. Copy the link and send it to them yourself. Links work once and expire in 14 days.'}
+      </p>
       <form onSubmit={submit} className="form-grid">
         <div className="field">
           <label htmlFor={ids.email} className="link-slate">Email</label>
@@ -268,12 +281,14 @@ function InviteForm({ roles, positions, onCreated }: { roles: Role[]; positions:
           </div>
         )}
         <div className="form-grid__full">
-          <button type="submit" className="btn btn--dark" disabled={busy}>{busy ? 'Creating…' : 'Create invite link'}</button>
+          <button type="submit" className="btn btn--dark" disabled={busy}>{busy ? (mailOn ? 'Sending…' : 'Creating…') : mailOn ? 'Send invite' : 'Create invite link'}</button>
         </div>
       </form>
       <p className="form-error" role="alert">{error}</p>
       {link && (
         <div className="invite-link" role="status">
+          {emailedTo && <p className="body-sm">Emailed to <strong>{emailedTo}</strong>.</p>}
+          {mailOn && !emailedTo && <p className="body-sm">The email didn’t go out. Copy the link and send it yourself.</p>}
           <label htmlFor={ids.link} className="link-slate">Invite link</label>
           <div className="invite-link__row">
             <input id={ids.link} className="input" readOnly value={link} onFocus={(e) => e.currentTarget.select()} />

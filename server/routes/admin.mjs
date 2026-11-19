@@ -1,4 +1,5 @@
 // Admin endpoints (owner/admin; practice settings owner-only). Every query is scoped to the admin's practice.
+import { inviteEmail, mailOn, sendMail } from '../mail.mjs';
 import { notInDemo } from './demo.mjs';
 import { daysFromNow, INVITE_DAYS, newToken, sha256 } from '../auth.mjs';
 import { now, tx } from '../db.mjs';
@@ -237,7 +238,19 @@ function registerTeam(router) {
           )
           .run(sha256(token), ctx.user.practice_id, email, name, title, role, ctx.user.id, now(), expiresAt, trackId);
       });
-      return { inviteUrl: `/invite/${token}`, expiresAt };
+      // Nov 19: when mail is on (server/mail.mjs), the invite is emailed too. The link stays on screen to copy either way.
+      let emailed = false;
+      if (mailOn(ctx.app) && !ctx.practice?.is_demo && !ctx.app.mailLimiter.blocked(`invite|${ctx.user.id}`)) {
+        ctx.app.mailLimiter.fail(`invite|${ctx.user.id}`);
+        const mail = inviteEmail({ name, practice: ctx.practice?.name, inviter: ctx.user.name, url: `${ctx.app.publicOrigin}/invite/${token}`, days: INVITE_DAYS });
+        try {
+          await sendMail({ to: email, ...mail });
+          emailed = true;
+        } catch (e) {
+          console.error('invite email', e.message);
+        }
+      }
+      return { inviteUrl: `/invite/${token}`, expiresAt, emailed };
     },
     admin,
   );

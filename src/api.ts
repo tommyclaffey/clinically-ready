@@ -368,6 +368,12 @@ export interface QuizAnswer {
   explanation: string
 }
 
+export interface ResetInfo {
+  email: string
+  practiceName: string
+  org?: PublicOrg
+}
+
 export interface InviteInfo {
   email: string
   name: string
@@ -702,7 +708,12 @@ export const api = {
   me: () => request<Session>('GET', '/api/me', undefined, { quiet401: true }),
   signup: (b: { practiceName: string; name: string; email: string; password: string }) =>
     request<Session>('POST', '/api/signup', b),
-  providers: () => request<Record<Provider, boolean>>('GET', '/api/auth/providers', undefined, { quiet401: true }),
+  providers: () => request<Record<Provider, boolean> & { email?: boolean }>('GET', '/api/auth/providers', undefined, { quiet401: true }),
+  // Forgot Password (Nov 19): a reset link by email when mail is on (server/mail.mjs)
+  forgot: (email: string) => request<{ ok: true; sent: boolean }>('POST', '/api/auth/forgot', { email }, { quiet401: true }),
+  resetInfo: (token: string) => request<ResetInfo>('GET', `/api/auth/reset/${enc(token)}`, undefined, { quiet401: true }),
+  resetPassword: (token: string, password: string) =>
+    request<Session>('POST', `/api/auth/reset/${enc(token)}`, { password }, { quiet401: true }),
   account: () => request<AccountInfo>('GET', '/api/account'),
   disconnect: (p: Provider) => request<{ ok: true }>('DELETE', `/api/account/identities/${p}`),
   changePassword: (b: { current?: string; next: string }) => request<{ ok: true }>('PUT', '/api/account/password', b),
@@ -743,7 +754,7 @@ export const api = {
   // Admin
   adminTeam: () => request<AdminTeam>('GET', '/api/admin/team'),
   createInvite: (b: { email: string; name: string; title: string; role: Role; positionId?: number | null }) =>
-    request<{ inviteUrl: string; expiresAt?: string }>('POST', '/api/admin/invites', b),
+    request<{ inviteUrl: string; expiresAt?: string; emailed?: boolean }>('POST', '/api/admin/invites', b),
   revokeInvite: (email: string) => request<{ ok: boolean }>('DELETE', `/api/admin/invites/${enc(email)}`),
   updateUser: (id: number, b: { role?: Role; title?: string; active?: boolean; positionId?: number | null }) =>
     request<unknown>('PUT', `/api/admin/users/${id}`, b),

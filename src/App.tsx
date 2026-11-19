@@ -1,7 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { RequireAuth, PublicOnly } from './auth'
 import { Shell } from './components/Shell'
-import { InvitePage, SignInPage, SignUpPage } from './pages/AuthPages'
+import { InvitePage, ResetPasswordPage, SignInPage, SignUpPage } from './pages/AuthPages'
 import { DashboardPage } from './pages/Dashboard'
 import { LessonPage } from './pages/Lesson'
 import { OnboardingPage } from './pages/Onboarding'
@@ -42,6 +42,7 @@ export function AppRoutes() {
       <Route path="/signin" element={<PublicOnly><SignInPage /></PublicOnly>} />
       <Route path="/signup" element={<PublicOnly><SignUpPage /></PublicOnly>} />
       <Route path="/invite/:token" element={<InvitePage />} />
+      <Route path="/reset/:token" element={<ResetPasswordPage />} />
       <Route path="/demo" element={<DemoPage />} />
       <Route path="/" element={<App><DashboardPage /></App>} />
       <Route path="/onboarding" element={<App><OnboardingPage /></App>} />

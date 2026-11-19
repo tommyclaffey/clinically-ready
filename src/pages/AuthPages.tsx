@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
-import { api, ApiError, type InviteInfo, type PublicOrg } from '../api'
+import { api, ApiError, type InviteInfo, type PublicOrg, type ResetInfo } from '../api'
 import { applyBrand, useAuth } from '../auth'
 import { LockIcon } from '../components/Icons'
 import { BrandMark, Label, Spinner } from '../components/ui'
@@ -118,6 +118,28 @@ export function SignInPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [forgot, setForgot] = useState(false)
+  // Nov 19: when the app can send email, Forgot Password sends a reset link (server/mail.mjs)
+  const [mailOn, setMailOn] = useState(false)
+  const [resetNote, setResetNote] = useState<string | null>(null)
+  const [resetBusy, setResetBusy] = useState(false)
+  useEffect(() => {
+    api.providers().then((p) => setMailOn(Boolean(p.email))).catch(() => setMailOn(false))
+  }, [])
+  const sendReset = async () => {
+    if (!email.trim()) {
+      setResetNote('Type the email you sign in with above, then press Email me a link.')
+      return
+    }
+    setResetBusy(true)
+    try {
+      await api.forgot(email.trim())
+      setResetNote('If that email has an account, a link to reset your password is on its way. It works once, for 2 hours.')
+    } catch (err) {
+      setResetNote(err instanceof Error ? err.message : 'Could not send the link. Try again in a moment.')
+    } finally {
+      setResetBusy(false)
+    }
+  }
   const org = useOrg()
   const terms = termsOf(org?.terms)
   const [params] = useSearchParams()
@@ -166,10 +188,19 @@ export function SignInPage() {
               </button>
             }
           />
-          {forgot && (
+          {forgot && !mailOn && (
             <p className="body-xs hint" role="status">
               Ask your {terms.org}’s admin to send you a fresh invite link. It lets you set a new password.
             </p>
+          )}
+          {forgot && mailOn && (
+            <div className="hint forgot-box" role="status">
+              <p className="body-xs">We’ll email a link to the address above. It lets you choose a new password.</p>
+              <button type="button" className="btn btn--ghost" onClick={() => void sendReset()} disabled={resetBusy}>
+                {resetBusy ? 'Sending…' : 'Email me a link'}
+              </button>
+              {resetNote && <p className="body-xs">{resetNote}</p>}
+            </div>
           )}
         </div>
         <FormError message={error} />
@@ -337,6 +368,95 @@ export function InvitePage() {
             {busy ? 'Setting up…' : 'Create my account'}
           </button>
           </>)}
+        </form>
+      )}
+    </AuthLayout>
+  )
+}
+
+/** Choose a new password from a Forgot Password link (Nov 19). Works once, for 2 hours; signs you out everywhere else. */
+export function ResetPasswordPage() {
+  const { token = '' } = useParams()
+  const { adopt } = useAuth()
+  const navigate = useNavigate()
+  const [info, setInfo] = useState<ResetInfo | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let live = true
+    api
+      .resetInfo(token)
+      .then((i) => {
+        if (!live) return
+        setInfo(i)
+        if (i.org) applyBrand(i.org)
+      })
+      .catch((e: unknown) => {
+        if (!live) return
+        setLoadError(
+          e instanceof ApiError && e.status === 404
+            ? 'This reset link has expired or was already used. Go to sign in and ask for a new one.'
+            : e instanceof Error
+              ? e.message
+              : 'Could not open this link.',
+        )
+      })
+    return () => {
+      live = false
+    }
+  }, [token])
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (password.length < 10) {
+      setError('Use at least 10 characters for your password.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      adopt(await api.resetPassword(token, password))
+      navigate('/', { replace: true })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not change your password.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <AuthLayout org={info?.org ?? null}>
+      {loadError ? (
+        <div className="signin__stack">
+          <Label>RESET PASSWORD</Label>
+          <h1 className="display-md">This link no longer works.</h1>
+          <p className="body-md" role="alert">
+            {loadError}
+          </p>
+          <Link className="btn btn--ghost" to="/signin">
+            Go to sign in
+          </Link>
+        </div>
+      ) : !info ? (
+        <Spinner label="Opening your link" />
+      ) : (
+        <form onSubmit={submit} className="signin__stack">
+          <Label>RESET PASSWORD</Label>
+          <h1 className="display-md">Choose a new password.</h1>
+          <p className="body-md">
+            For <strong className="text-slate">{info.email}</strong> at {info.practiceName}. You’ll be signed out everywhere else.
+          </p>
+          <div className="signin__fields">
+            <Field label="New password" type="password" value={password} onChange={setPassword} autoComplete="new-password" minLength={10} />
+            <p className="body-xs">At least 10 characters.</p>
+          </div>
+          <FormError message={error} />
+          <button type="submit" className="btn btn--dark btn--block" disabled={busy}>
+            {busy ? 'Saving…' : 'Save and sign in'}
+          </button>
         </form>
       )}
     </AuthLayout>

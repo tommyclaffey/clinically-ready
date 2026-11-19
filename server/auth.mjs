@@ -9,7 +9,8 @@ const KEYLEN = 64;
 export const MIN_PASSWORD = 10;
 export const SESSION_COOKIE = 'coa_session';
 export const SESSION_DAYS = 14;
-export const INVITE_DAYS = 7;
+export const INVITE_DAYS = 14; // App Buildout Standard stage 6: invite links are single-use and expire in 14 days
+export const RESET_HOURS = 2;
 
 function scryptAsync(password, salt, n, r, p) {
   return new Promise((resolve, reject) => {

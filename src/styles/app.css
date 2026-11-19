@@ -1473,3 +1473,7 @@ input.sr-only:focus-visible + .file-pick, .file-pick:focus-within { outline: 2px
   .dw-actions { width: 100%; margin: 0; }
   .dw-actions .tour__btn { flex: 1; padding: 9px 10px; }
 }
+
+/* Forgot Password (Nov 19): the note, its button and the answer, spaced like a small form */
+.forgot-box { display: grid; gap: 10px; justify-items: start; }
+.forgot-box > p { margin: 0; }
