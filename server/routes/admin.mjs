@@ -11,7 +11,6 @@ import { formStatus, formsFor, latestSubmissions } from './paperwork.mjs';
 import { completeBlocks, firstVideoUrl, pageBlocksOf, validatePageBlocks, withVideo } from '../pageblocks.mjs';
 import { everyoneIds, notify } from '../notify.mjs';
 import { loadReplies } from './messages.mjs';
-import { listBackups, runBackup } from '../backup.mjs';
 import { ownLesson } from './learner.mjs';
 import { poolSizes, quizSettings } from '../sectionquiz.mjs';
 
@@ -289,8 +288,9 @@ function registerTeam(router) {
       if (changingRole && (target.role === 'owner' || fields.role === 'owner') && me.role !== 'owner') {
         fail(403, 'Only an owner can change owner roles.');
       }
-      if (deactivating && target.role === 'owner' && me.role !== 'owner') {
-        fail(403, 'Only an owner can deactivate an owner.');
+      // Nov 19 (security review): turning an owner back on is owner-only too, not just turning one off
+      if (fields.active !== undefined && fields.active !== target.active && target.role === 'owner' && me.role !== 'owner') {
+        fail(403, 'Only an owner can turn an owner’s access on or off.');
       }
       if ((changingRole || deactivating) && target.id === me.id) {
         fail(409, "You can't change your own role or deactivate yourself.");
@@ -616,21 +616,7 @@ function registerPractice(router) {
   }, { auth: 'owner' });
 }
 
-function registerBackups(router) {
-  const owner = { auth: 'owner' };
-  router.add('GET', '/api/admin/backups', async (ctx) => {
-    if (!ctx.app.s3) return { enabled: false, dates: [] };
-    return { enabled: true, dates: await listBackups(ctx.app.s3) };
-  }, owner);
-  router.add('POST', '/api/admin/backup', async (ctx) => {
-    if (!ctx.app.s3) fail(503, 'Backups aren’t set up on this server.');
-    const r = await runBackup({ db: ctx.db, dataDir: ctx.app.dataDir, s3: ctx.app.s3 });
-    return { ok: true, date: r.date, bytes: r.bytes };
-  }, owner);
-}
-
 export default function register(router) {
-  registerBackups(router);
   registerTeam(router);
   registerContent(router);
   registerPractice(router);

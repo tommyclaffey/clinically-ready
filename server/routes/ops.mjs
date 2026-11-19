@@ -8,6 +8,7 @@ import { timingSafeEqual } from 'node:crypto';
 import { now } from '../db.mjs';
 import { fail, readJson } from '../http.mjs';
 import { LoginLimiter } from '../auth.mjs';
+import { listBackups, runBackup } from '../backup.mjs';
 
 const KEEP_DAYS = 90;
 const cut = (s, n) => String(s ?? '').replace(/[\r\n]+/g, ' ').slice(0, n);
@@ -44,12 +45,36 @@ export default function register(router) {
     return { ok: true };
   }, { optionalUser: true });
 
+  // Backups (Nov 19, security review): these were owner routes, so any practice owner, including a demo visitor, could
+  // start a full-server backup over and over. Now operator only (OPS_TOKEN), one at a time. The nightly schedule is
+  // unchanged (server/backup.mjs).
+  let running = false;
+  router.add('GET', '/api/ops/backups', async (ctx) => {
+    opsAllowed(ctx);
+    if (!ctx.app.s3) return { enabled: false, dates: [] };
+    return { enabled: true, dates: await listBackups(ctx.app.s3) };
+  });
+  router.add('POST', '/api/ops/backup', async (ctx) => {
+    opsAllowed(ctx);
+    if (!ctx.app.s3) fail(503, 'Backups aren’t set up on this server.');
+    if (running) fail(409, 'A backup is already running.');
+    running = true;
+    try {
+      const r = await runBackup({ db: ctx.db, dataDir: ctx.app.dataDir, s3: ctx.app.s3 });
+      return { ok: true, date: r.date, bytes: r.bytes };
+    } finally { running = false; }
+  });
+
   router.add('GET', '/api/ops/errors', (ctx) => {
     opsAllowed(ctx);
     const hours = Math.min(Math.max(Number(ctx.query.get('hours')) || 24, 1), 24 * 30);
     const since = new Date(Date.now() - hours * 3600e3).toISOString();
-    const rows = ctx.db.prepare('SELECT at, kind, message, path FROM errors WHERE at > ? ORDER BY id DESC LIMIT 20').all(since);
-    const count = ctx.db.prepare('SELECT COUNT(*) n FROM errors WHERE at > ?').get(since).n;
-    return { hours, count, recent: rows };
+    // Nov 19 (security review): anyone can send a browser report, so only server errors and signed-in people's browser
+    // errors count toward the alert. Anonymous reports are still kept and listed.
+    const COUNTS = "(kind = 'server' OR user_id IS NOT NULL)";
+    const rows = ctx.db.prepare(`SELECT at, kind, message, path, ${COUNTS} counts FROM errors WHERE at > ? ORDER BY id DESC LIMIT 20`).all(since);
+    const count = ctx.db.prepare(`SELECT COUNT(*) n FROM errors WHERE at > ? AND ${COUNTS}`).get(since).n;
+    const anonymous = ctx.db.prepare(`SELECT COUNT(*) n FROM errors WHERE at > ? AND NOT ${COUNTS}`).get(since).n;
+    return { hours, count, anonymous, recent: rows.map((r) => ({ ...r, counts: Boolean(r.counts) })) };
   });
 }

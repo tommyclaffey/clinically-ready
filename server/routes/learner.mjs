@@ -272,6 +272,9 @@ export default function register(router) {
         .prepare('SELECT * FROM quiz_questions WHERE id = ? AND practice_id = ?')
         .get(intId(ctx.params.id), ctx.user.practice_id);
       if (!question) fail(404, 'That question was not found.');
+      // Nov 19 (security review): a step's quick check follows its section's lock, like the step itself
+      const lesson = ctx.db.prepare('SELECT * FROM lessons WHERE id = ? AND practice_id = ?').get(question.lesson_id, ctx.user.practice_id);
+      if (lesson) assertOpen(ctx, lesson);
       const body = await readJson(ctx.req);
       const options = parseList(question.options);
       const index = v.int(body.index, 'index', { max: Math.max(0, options.length - 1) });
@@ -281,6 +284,17 @@ export default function register(router) {
       ctx.db
         .prepare('INSERT INTO quiz_answers(practice_id, user_id, lesson_id, question_id, choice, correct, answered_at) VALUES (?,?,?,?,?,?,?)')
         .run(ctx.user.practice_id, ctx.user.id, question.lesson_id, question.id, index, correct ? 1 : 0, now());
+      // Nov 19 (security review): the same question often sits in its section's quiz pool. Answering it here mustn't
+      // hand over the right answer for that quiz, so it's only shown once the person has passed the section quiz
+      // (owners and admins always see it).
+      const inPool = ctx.db
+        .prepare('SELECT 1 FROM section_questions WHERE practice_id = ? AND week_id = ? AND active = 1 AND lower(trim(prompt)) = lower(trim(?))')
+        .get(ctx.user.practice_id, lesson?.week_id ?? -1, question.prompt);
+      const staff = ctx.user.role === 'owner' || ctx.user.role === 'admin';
+      const passed = inPool && !staff && ctx.db
+        .prepare('SELECT 1 FROM quiz_attempts WHERE practice_id = ? AND user_id = ? AND week_id = ? AND passed = 1')
+        .get(ctx.user.practice_id, ctx.user.id, lesson.week_id);
+      if (inPool && !staff && !passed) return { correct, correctIndex: correct ? question.correct_index : null, explanation: correct ? question.explanation || '' : '', hidden: !correct };
       return { correct, correctIndex: question.correct_index, explanation: question.explanation || '' };
     },
     auth,

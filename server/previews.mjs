@@ -72,6 +72,9 @@ async function analysePdf(bytes) {
 // ---------------------------------------------------------------- DOCX
 
 /** Minimal ZIP reader: { name: Buffer } for the entries we ask for (stored or deflated). */
+/** The most one zipped part may expand to (Nov 19, security review). */
+export const MAX_UNZIPPED = 20 * 1024 * 1024;
+
 export function unzip(buf, wanted) {
   const out = {};
   let eocd = -1;
@@ -93,7 +96,11 @@ export function unzip(buf, wanted) {
     if (wanted.includes(name)) {
       const start = local + 30 + buf.readUInt16LE(local + 26) + buf.readUInt16LE(local + 28);
       const data = buf.subarray(start, start + size);
-      out[name] = method === 0 ? data : inflateRawSync(data);
+      // Nov 19 (security review): a crafted file could expand ~1000× and take the server's memory. The declared size
+      // is checked first, and inflate is capped either way (a real document.xml is a few MB at most).
+      const declared = buf.readUInt32LE(p + 24);
+      if (declared > MAX_UNZIPPED) throw new Error('file too large to preview');
+      out[name] = method === 0 ? data : inflateRawSync(data, { maxOutputLength: MAX_UNZIPPED });
     }
     p += 46 + nameLen + extraLen + commentLen;
   }

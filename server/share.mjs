@@ -45,7 +45,7 @@ export function shareTags({ practice, origin, url, imageFor }) {
 
 /** index.html with the share tags in place of its plain <title>. */
 export function renderIndex(html, tags) {
-  return html.replace(/<title>[\s\S]*?<\/title>/, tags);
+  return html.replace(/<title>[\s\S]*?<\/title>/, () => tags); // a function, so "$`" or "$'" in a URL stays text (Nov 19)
 }
 
 export const cardExists = (distDir) => (slug) => fs.existsSync(path.join(distDir, 'og', `${slug}.jpg`));

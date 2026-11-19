@@ -78,6 +78,7 @@ function Question({ q }: { q: QuizQuestion }) {
             <div>
               <p className="row-title-sm">{result.correct ? 'Correct.' : 'Not quite.'}</p>
               {result.explanation && <p className="body-sm-dark">{result.explanation}</p>}
+              {result.hidden && <p className="body-sm-dark">Try another answer. This one is in the section quiz, so its answer shows once you pass it.</p>}
             </div>
           </div>
         )}

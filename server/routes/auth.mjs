@@ -69,6 +69,7 @@ export default function register(router) {
     const password = typeof body.password === 'string' ? body.password : '';
     const key = `${email}|${ctx.ip}`;
     if (ctx.app.limiter.blocked(key)) fail(429, 'Too many sign-in attempts. Try again in 15 minutes.');
+    if (email && ctx.app.accountLimiter.blocked(email)) fail(429, 'Too many sign-in attempts for this account. Try again in an hour.');
 
     const user = email ? ctx.db.prepare('SELECT * FROM users WHERE email = ?').get(email) : null;
     let ok = false;
@@ -77,6 +78,7 @@ export default function register(router) {
 
     if (!ok) {
       ctx.app.limiter.fail(key);
+      if (email) ctx.app.accountLimiter.fail(email);
       fail(401, BAD_LOGIN);
     }
     ctx.app.limiter.reset(key);
@@ -170,15 +172,16 @@ export default function register(router) {
     const email = typeof body.email === 'string' ? body.email.trim().toLowerCase().slice(0, 254) : '';
     if (!mailOn(ctx.app)) return { ok: true, sent: false };
     if (!email || !email.includes('@')) fail(400, 'Enter the email you sign in with.');
-    // 3 an hour per email; 30 an hour per network (a whole office shares one address)
-    if (ctx.app.resetLimiter.blocked(`forgot|${email}`) || ctx.app.mailLimiter.blocked(`forgot-ip|${ctx.ip}`)) {
-      fail(429, 'We’ve sent a few links already. Check your inbox, or try again in an hour.');
-    }
-    ctx.app.resetLimiter.fail(`forgot|${email}`);
+    // 30 an hour per network (a whole office shares one address)
+    if (ctx.app.mailLimiter.blocked(`forgot-ip|${ctx.ip}`)) fail(429, 'We’ve sent a few links already. Check your inbox, or try again in an hour.');
     ctx.app.mailLimiter.fail(`forgot-ip|${ctx.ip}`);
+    // Nov 19 (security review): the answer goes back at once and the email goes out in the background, so the time it
+    // takes never shows whether the account exists. Over 3 links an hour for one email, the extras are quietly not sent
+    // (no error), so a stranger can't tell or prove they've used up someone's links.
     const user = ctx.db.prepare('SELECT * FROM users WHERE email = ? AND active = 1').get(email);
     const practice = user && ctx.db.prepare('SELECT * FROM practices WHERE id = ?').get(user.practice_id);
-    if (user && practice && !practice.is_demo && signInOf(practice).password) {
+    if (user && practice && !practice.is_demo && signInOf(practice).password && !ctx.app.resetLimiter.blocked(`forgot|${email}`)) {
+      ctx.app.resetLimiter.fail(`forgot|${email}`);
       const token = newToken();
       tx(ctx.db, () => {
         ctx.db.prepare('DELETE FROM password_resets WHERE user_id = ? AND used_at IS NULL').run(user.id);
@@ -187,11 +190,7 @@ export default function register(router) {
           .run(sha256(token), user.id, now(), new Date(Date.now() + RESET_HOURS * 3600_000).toISOString());
       });
       const mail = resetEmail({ name: user.name, practice: practice.name, url: `${ctx.app.publicOrigin}/reset/${token}`, hours: RESET_HOURS });
-      try {
-        await sendMail({ to: user.email, ...mail });
-      } catch (e) {
-        console.error('reset email', e.message); // the answer stays the same either way
-      }
+      sendMail({ to: user.email, ...mail }).catch((e) => console.error('reset email', e.message));
     }
     return { ok: true, sent: true };
   });

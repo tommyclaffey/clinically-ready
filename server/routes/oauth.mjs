@@ -70,10 +70,12 @@ export default function register(router) {
 
   // Step 1: remember who's asking (state + PKCE verifier + nonce), then send them to the provider.
   router.add('GET', '/api/auth/oauth/:provider/start', (ctx) => {
-    const [name, p] = provider(ctx);
-    const inviteToken = ctx.query.get('invite');
     const linking = ctx.query.get('link') === '1';
     if (linking && !ctx.user) fail(401, 'Sign in first.');
+    // Nov 19 (security review): a demo account can't link a real Google or Microsoft account
+    if (linking && ctx.db.prepare('SELECT is_demo FROM practices WHERE id = ?').get(ctx.user.practice_id)?.is_demo) fail(403, 'That’s turned off in the demo.');
+    const [name, p] = provider(ctx);
+    const inviteToken = ctx.query.get('invite');
     const state = newToken();
     const verifier = newVerifier();
     const nonce = newToken();

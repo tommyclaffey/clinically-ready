@@ -29,6 +29,7 @@ after(async () => {
   fake.close();
 });
 
+const waitFor = async (ok) => { for (let i = 0; i < 50 && !ok(); i++) await new Promise((r) => setTimeout(r, 20)); };
 const linkIn = (mail, kind) => new RegExp(`${ORIGIN}/${kind}/([A-Za-z0-9_-]+)`).exec(mail.text)?.[1];
 const mailOn = () => { process.env.RESEND_API_KEY = 're_test'; process.env.MAIL_FROM = 'Clinically Ready <hello@example.test>'; };
 const mailOff = () => { delete process.env.RESEND_API_KEY; delete process.env.MAIL_FROM; };
@@ -73,6 +74,7 @@ test('Forgot Password: a link that works once, signs out everywhere, and the new
   const before = sent.length;
   const r = await t.client().post('/api/auth/forgot', { email: JORDAN.toUpperCase() });
   assert.deepEqual(r.body, { ok: true, sent: true });
+  await waitFor(() => sent.length > before);
   assert.equal(sent.length, before + 1);
   const mail = sent.at(-1);
   assert.deepEqual(mail.to, [JORDAN]);
@@ -97,16 +99,27 @@ test('Forgot Password: same answer for an unknown email, nothing sent; a newer l
   const before = sent.length;
   const r = await t.client().post('/api/auth/forgot', { email: 'nobody@nowhere.test' });
   assert.deepEqual(r.body, { ok: true, sent: true });
+  await new Promise((res) => setTimeout(res, 100));
   assert.equal(sent.length, before, 'no email for an address with no account');
+  let k = sent.length;
   await t.client().post('/api/auth/forgot', { email: ANGELA });
+  await waitFor(() => sent.length > k);
   const first = linkIn(sent.at(-1), 'reset');
+  k = sent.length;
   await t.client().post('/api/auth/forgot', { email: ANGELA });
+  await waitFor(() => sent.length > k);
   const second = linkIn(sent.at(-1), 'reset');
   assert.notEqual(first, second);
   assert.equal((await t.client().get(`/api/auth/reset/${first}`)).status, 404, 'the older link stopped working');
   assert.equal((await t.client().get(`/api/auth/reset/${second}`)).status, 200);
-  assert.equal((await t.client().post('/api/auth/forgot', { email: ANGELA })).status, 200);
-  assert.equal((await t.client().post('/api/auth/forgot', { email: ANGELA })).status, 429, '3 an hour per address');
+  k = sent.length;
+  await t.client().post('/api/auth/forgot', { email: ANGELA });
+  await waitFor(() => sent.length > k);
+  const n = sent.length;
+  const fourth = await t.client().post('/api/auth/forgot', { email: ANGELA });
+  assert.deepEqual(fourth.body, { ok: true, sent: true }, 'over 3 an hour: the same answer, no error (security review)');
+  await new Promise((r) => setTimeout(r, 100));
+  assert.equal(sent.length, n, '…and no fourth email');
 });
 
 test('reset links are stored only as hashes', async () => {

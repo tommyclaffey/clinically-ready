@@ -34,8 +34,11 @@ const SECURITY_HEADERS = {
   // Nov 12, Tommy: the live demo opens inside his portfolio's link viewer (an iframe on
   // tommyclaffey.com), the way Growth and Queue do. Only these origins may frame the app;
   // every other site is still refused, as X-Frame-Options: DENY did before.
-  'Content-Security-Policy': "frame-ancestors 'self' https://tommyclaffey.com https://www.tommyclaffey.com",
+  // Nov 19 (security review): + scripts only from the app itself (no inline or outside scripts), plugins off.
+  'Content-Security-Policy': "frame-ancestors 'self' https://tommyclaffey.com https://www.tommyclaffey.com; script-src 'self'; object-src 'none'; base-uri 'self'",
 };
+// Nov 19 (security review): browsers keep to https for a year once they've seen the site (production only).
+const HSTS = 'max-age=31536000; includeSubDomains';
 
 function buildRouter() {
   const router = new Router();
@@ -67,9 +70,17 @@ function writeAllowed(req) {
   }
 }
 
+/** The visitor's address, for rate limits (Nov 19, security review; same fix as Mise Nov 14). The first X-Forwarded-For
+ *  entry is whatever the browser sent, so changing it on every try got round every per-address limit. Railway's edge sets
+ *  X-Real-IP and adds the address it saw to the end of X-Forwarded-For, so those are used; without a proxy, the socket. */
 function clientIp(req, trustProxy) {
-  const fwd = trustProxy && req.headers['x-forwarded-for'];
-  return (fwd ? String(fwd).split(',')[0].trim() : req.socket.remoteAddress) || 'unknown';
+  if (trustProxy) {
+    const real = String(req.headers['x-real-ip'] || '').trim();
+    if (real) return real;
+    const xff = String(req.headers['x-forwarded-for'] || '').split(',').map((x) => x.trim()).filter(Boolean);
+    if (xff.length) return xff[xff.length - 1];
+  }
+  return req.socket.remoteAddress || 'unknown';
 }
 
 const ROLE_OK = {
@@ -145,6 +156,8 @@ export function startServer({
     secure: production,
     trustProxy: process.env.TRUST_PROXY === '1',
     limiter: new LoginLimiter(),
+    // Nov 19 (security review): 20 wrong passwords an hour per account, whatever address they come from
+    accountLimiter: new LoginLimiter({ max: 20, windowMs: 60 * 60 * 1000 }),
     demoLimiter: new LoginLimiter({ max: 12, windowMs: 60 * 60 * 1000 }),
     // Nov 19: Forgot Password (3 an hour per address) and emailed invites (30 an hour per sender)
     resetLimiter: new LoginLimiter({ max: 3, windowMs: 60 * 60 * 1000 }),
@@ -159,6 +172,8 @@ export function startServer({
   const stopBackups = s3 && backups ? scheduleBackups({ db: app.db, dataDir, s3 }) : null;
   const stopDemoSweep = scheduleDemoSweep(app.db, dataDir, () => {});
   purgeErrors(app.db); // Nov 19: the error log keeps 90 days
+  // Nov 19 (security review): drop old rate-limit entries so the memory they use can't grow without end
+  setInterval(() => { for (const k of Object.keys(app)) if (app[k] instanceof LoginLimiter) app[k].sweep(); }, 10 * 60 * 1000).unref();
   setInterval(() => purgeErrors(app.db), 864e5).unref();
   const stopBackfill = backfillPreviews(app.db, dataDir);
   if (production && !s3) console.warn('No BACKUP_S3_* variables: backups are OFF.');
@@ -166,6 +181,7 @@ export function startServer({
 
   const server = http.createServer(async (req, res) => {
     for (const [k, val] of Object.entries(SECURITY_HEADERS)) res.setHeader(k, val);
+    if (production) res.setHeader('Strict-Transport-Security', HSTS);
     let url;
     try {
       url = new URL(req.url, 'http://localhost');

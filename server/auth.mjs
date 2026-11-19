@@ -129,4 +129,9 @@ export class LoginLimiter {
   reset(key) {
     this.failures.delete(key);
   }
+
+  /** Forget keys with no tries left in the window (run every few minutes). */
+  sweep() {
+    for (const key of [...this.failures.keys()]) this.recent(key);
+  }
 }

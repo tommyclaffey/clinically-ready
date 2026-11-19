@@ -121,18 +121,20 @@ describe('backup and restore', () => {
     assert.deepEqual(await listBackups(s3), ['2026-10-10', '2026-10-09', '2026-10-01']);
   });
 
-  test('only owners can list or trigger backups', async () => {
+  test('backups are operator-only (OPS_TOKEN), never a practice owner’s (Nov 19, security review)', async () => {
     const angela = await login(ANGELA);
-    const office = await login(OFFICE);
-    assert.equal((await call(office, 'POST', '/api/admin/backup')).status, 403);
-    assert.equal((await call(office, 'GET', '/api/admin/backups')).status, 403);
-    const r = await call(angela, 'POST', '/api/admin/backup');
+    assert.equal((await call(angela, 'POST', '/api/admin/backup')).status, 404, 'the old owner route is gone');
+    assert.equal((await call(angela, 'POST', '/api/ops/backup')).status, 404, 'an owner’s session isn’t enough');
+    process.env.OPS_TOKEN = 'ops-backup-test';
+    const ops = (method, url) => fetch(srv.base + url, { method, headers: { Authorization: 'Bearer ops-backup-test', 'X-COA': '1' } });
+    const r = await ops('POST', '/api/ops/backup');
     assert.equal(r.status, 200);
     const body = await r.json();
     assert.ok(body.bytes > 0);
-    const list = await (await call(angela, 'GET', '/api/admin/backups')).json();
+    const list = await (await ops('GET', '/api/ops/backups')).json();
     assert.equal(list.enabled, true);
     assert.ok(list.dates.includes(body.date));
+    delete process.env.OPS_TOKEN;
   });
 });
 

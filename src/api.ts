@@ -364,8 +364,10 @@ export interface LessonDetail {
 
 export interface QuizAnswer {
   correct: boolean
-  correctIndex: number
+  /** null when the right answer is held back until the section quiz is passed (Nov 19) */
+  correctIndex: number | null
   explanation: string
+  hidden?: boolean
 }
 
 export interface ResetInfo {

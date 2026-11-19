@@ -46,7 +46,15 @@ export async function describeResource(db, dataDir, row) {
     db.prepare("UPDATE resources SET preview_name = '' WHERE id = ?").run(row.id);
     return;
   }
-  const { pages, png } = await analyseFile(ext, bytes);
+  // Nov 19 (security review): marked "no preview" before trying, so a file that crashes the preview maker isn't retried
+  // on every restart by the backfill. A good result overwrites it just below.
+  db.prepare("UPDATE resources SET preview_name = '' WHERE id = ?").run(row.id);
+  let pages = null, png = null;
+  try {
+    ({ pages, png } = await analyseFile(ext, bytes));
+  } catch {
+    return; // stays "no preview": the card shows the file-type drawing
+  }
   let previewName = '';
   if (png) {
     previewName = `${path.basename(row.stored_name, path.extname(row.stored_name))}.preview.png`;

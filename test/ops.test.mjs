@@ -23,8 +23,14 @@ test('a browser error is logged (cut short) and counted', async () => {
   const c = t.client();
   const r = await c.post('/api/client-errors', { message: 'TypeError: x is undefined\nsecond line', stack: 'at y', path: '/lesson/4' });
   assert.equal(r.status, 200);
-  const body = await (await ops()).json();
-  assert.equal(body.count, 1);
+  let body = await (await ops()).json();
+  assert.equal(body.count, 0, 'an anonymous report is kept but doesn’t set off the alert (Nov 19, security review)');
+  assert.equal(body.anonymous, 1);
+  const jordan = await t.as('jordan@thewell.test');
+  await jordan.post('/api/client-errors', { message: 'signed-in crash' });
+  body = await (await ops()).json();
+  assert.equal(body.count, 1, 'a signed-in person’s browser error counts');
+  body.recent = body.recent.filter((e) => e.message.startsWith('TypeError'));
   assert.equal(body.recent[0].kind, 'browser');
   assert.equal(body.recent[0].message, 'TypeError: x is undefined second line');
   assert.equal(body.recent[0].path, '/lesson/4');
